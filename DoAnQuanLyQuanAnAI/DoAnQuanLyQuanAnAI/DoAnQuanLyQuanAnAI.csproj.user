@@ -1,0 +1,58 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup />
+  <ItemGroup>
+    <ApplicationDefinition Update="App.xaml">
+      <SubType>Designer</SubType>
+    </ApplicationDefinition>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Update="AddAccountDialog.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Update="Editaccountdialog.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Update="InvoiceDetailDialog.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Update="Menuitemdialog.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Update="OwnerDashboardWindow.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Update="QRPaymentWindow.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Update="StaffPOSWindow.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <Page Update="AddAccountDialog.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Editaccountdialog.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="InvoiceDetailDialog.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="MainWindow.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Menuitemdialog.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="OwnerDashboardWindow.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="QRPaymentWindow.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="StaffPOSWindow.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+  </ItemGroup>
+</Project>

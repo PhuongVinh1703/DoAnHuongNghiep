@@ -1,0 +1,114 @@
+﻿<Window x:Class="DoAnQuanLyQuanAnAI.EditAccountDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Sửa thông tin nhân viên"
+        Height="580" Width="460"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#f0f2f5"
+        FontFamily="Segoe UI">
+    <Grid>
+        <Border VerticalAlignment="Top" Height="56" Background="#1e293b" Padding="24,0">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="✏️" FontSize="18" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock Text="Sửa thông tin nhân viên" FontSize="16" FontWeight="Bold"
+                           Foreground="White" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <Border Margin="20,72,20,72" Background="White" CornerRadius="12" Padding="20">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.08" Color="Black"/>
+            </Border.Effect>
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+
+                    <TextBlock Text="Họ và tên *" FontSize="12" FontWeight="SemiBold" Foreground="#64748b" Margin="0,0,0,6"/>
+                    <TextBox x:Name="TxtFullName" Padding="12,10" FontSize="14"
+                             Background="#f8fafc" BorderBrush="#e2e8f0" BorderThickness="1" Margin="0,0,0,14">
+                        <TextBox.Resources>
+                            <Style TargetType="Border">
+                                <Setter Property="CornerRadius" Value="8"/>
+                            </Style>
+                        </TextBox.Resources>
+                    </TextBox>
+
+                    <TextBlock Text="Số điện thoại" FontSize="12" FontWeight="SemiBold" Foreground="#64748b" Margin="0,0,0,6"/>
+                    <TextBox x:Name="TxtPhone" Padding="12,10" FontSize="14"
+                             Background="#f8fafc" BorderBrush="#e2e8f0" BorderThickness="1" Margin="0,0,0,14">
+                        <TextBox.Resources>
+                            <Style TargetType="Border">
+                                <Setter Property="CornerRadius" Value="8"/>
+                            </Style>
+                        </TextBox.Resources>
+                    </TextBox>
+
+                    <!-- Giới tính + Vai trò -->
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Giới tính *" FontSize="12" FontWeight="SemiBold" Foreground="#64748b" Margin="0,0,0,6"/>
+                            <ComboBox x:Name="CbGender" Padding="12,10" FontSize="14" Background="#f8fafc" BorderBrush="#e2e8f0">
+                                <ComboBoxItem Content="👨 Nam"   Tag="0"/>
+                                <ComboBoxItem Content="👩 Nữ"   Tag="1"/>
+                                <ComboBoxItem Content="🧑 Khác" Tag="2"/>
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Vai trò *" FontSize="12" FontWeight="SemiBold" Foreground="#64748b" Margin="0,0,0,6"/>
+                            <ComboBox x:Name="CbRole" Padding="12,10" FontSize="14" Background="#f8fafc" BorderBrush="#e2e8f0">
+                                <ComboBoxItem Content="👤 Nhân viên" Tag="1"/>
+                                <ComboBoxItem Content="👑 Owner"     Tag="0"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Chi nhánh -->
+                    <TextBlock Text="Chi nhánh" FontSize="12" FontWeight="SemiBold" Foreground="#64748b" Margin="0,0,0,6"/>
+                    <ComboBox x:Name="CbBranch" Padding="12,10" FontSize="14"
+                              Background="#f8fafc" BorderBrush="#e2e8f0"
+                              DisplayMemberPath="DisplayName" Margin="0,0,0,6"/>
+                    <TextBlock x:Name="TxtBranchLocked"
+                               Text="🔒 Chi nhánh đã được khóa theo tài khoản quản lý"
+                               FontSize="11" Foreground="#94a3b8"
+                               Margin="0,0,0,14" Visibility="Collapsed"/>
+
+                    <Border x:Name="ErrorBox" Background="#fef2f2" BorderBrush="#fecaca"
+                            BorderThickness="1" CornerRadius="8" Padding="12,8"
+                            Margin="0,8,0,0" Visibility="Collapsed">
+                        <TextBlock x:Name="TxtError" Text="" Foreground="#ef4444" FontSize="13" TextWrapping="Wrap"/>
+                    </Border>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom" Margin="0,0,20,20">
+            <Button Content="Hủy" Click="BtnCancel_Click"
+                    Background="#f1f5f9" Foreground="#475569"
+                    BorderThickness="0" Padding="20,10" FontSize="14"
+                    Cursor="Hand" Margin="0,0,10,0">
+                <Button.Resources>
+                    <Style TargetType="Border">
+                        <Setter Property="CornerRadius" Value="8"/>
+                    </Style>
+                </Button.Resources>
+            </Button>
+            <Button Content="💾 Lưu thay đổi" Click="BtnSave_Click"
+                    Background="#3b82f6" Foreground="White"
+                    BorderThickness="0" Padding="20,10" FontSize="14"
+                    FontWeight="SemiBold" Cursor="Hand">
+                <Button.Resources>
+                    <Style TargetType="Border">
+                        <Setter Property="CornerRadius" Value="8"/>
+                    </Style>
+                </Button.Resources>
+            </Button>
+        </StackPanel>
+    </Grid>
+</Window>

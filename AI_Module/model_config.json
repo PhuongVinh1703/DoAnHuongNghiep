@@ -1,0 +1,24 @@
+{
+  "features": [
+    "session_duration",
+    "num_items_ordered",
+    "cancel_rate",
+    "transaction_hour",
+    "checkout_time_sec",
+    "void_count",
+    "discount_percent",
+    "add_remove_ratio"
+  ],
+  "anomaly_threshold": 0.5,
+  "high_risk": 0.75,
+  "anomaly_types": [
+    "CancelAfterPayment",
+    "ExcessiveDiscount",
+    "FrequentCancellation",
+    "SpeedAnomaly",
+    "UnusualHours"
+  ],
+  "model_version": "2.0",
+  "auc_score": 1.0,
+  "cv_f1_mean": 1.0
+}

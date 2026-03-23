@@ -1,0 +1,136 @@
+﻿<Window x:Class="DoAnQuanLyQuanAnAI.MenuItemDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Thêm / Sửa món ăn"
+        Height="620" Width="500"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#f0f2f5"
+        FontFamily="Segoe UI">
+    <Grid>
+        <!-- Header -->
+        <Border VerticalAlignment="Top" Height="56" Background="#1e293b" Padding="24,0">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock x:Name="TxtHeaderEmoji" Text="🍽️" FontSize="22" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock x:Name="TxtHeaderTitle" Text="Thêm món ăn mới" FontSize="16" FontWeight="Bold"
+                           Foreground="White" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Form -->
+        <Border Margin="20,72,20,70" Background="White" CornerRadius="12" Padding="20">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.08" Color="Black"/>
+            </Border.Effect>
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <!-- Emoji picker -->
+                    <TextBlock Text="Biểu tượng món *" FontSize="12" FontWeight="SemiBold"
+                               Foreground="#64748b" Margin="0,0,0,6"/>
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="60"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Hiển thị emoji đã chọn -->
+                        <Border Grid.Column="0" Background="#f8fafc" BorderBrush="#e2e8f0"
+                                BorderThickness="1" CornerRadius="8" Width="52" Height="52"
+                                Cursor="Hand" MouseLeftButtonDown="BtnPickEmoji_Click">
+                            <TextBlock x:Name="TxtSelectedEmoji" Text="🍽️"
+                                       FontSize="28" HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+
+                        <!-- Bảng emoji quick-pick -->
+                        <Border Grid.Column="1" Margin="10,0,0,0" Background="#f8fafc"
+                                BorderBrush="#e2e8f0" BorderThickness="1" CornerRadius="8" Padding="6">
+                            <WrapPanel x:Name="EmojiPanel"/>
+                        </Border>
+                    </Grid>
+
+                    <!-- Tên món -->
+                    <TextBlock Text="Tên món *" FontSize="12" FontWeight="SemiBold"
+                               Foreground="#64748b" Margin="0,0,0,6"/>
+                    <TextBox x:Name="TxtName" Padding="12,10" FontSize="14"
+                             Background="#f8fafc" BorderBrush="#e2e8f0" BorderThickness="1"
+                             Foreground="#1e293b" Margin="0,0,0,14">
+                        <TextBox.Resources>
+                            <Style TargetType="Border">
+                                <Setter Property="CornerRadius" Value="8"/>
+                            </Style>
+                        </TextBox.Resources>
+                    </TextBox>
+
+                    <!-- Mô tả -->
+                    <TextBlock Text="Mô tả" FontSize="12" FontWeight="SemiBold"
+                               Foreground="#64748b" Margin="0,0,0,6"/>
+                    <TextBox x:Name="TxtDescription" Padding="12,10" FontSize="14"
+                             Background="#f8fafc" BorderBrush="#e2e8f0" BorderThickness="1"
+                             Foreground="#1e293b" Margin="0,0,0,14" Height="60"
+                             TextWrapping="Wrap" AcceptsReturn="True">
+                        <TextBox.Resources>
+                            <Style TargetType="Border">
+                                <Setter Property="CornerRadius" Value="8"/>
+                            </Style>
+                        </TextBox.Resources>
+                    </TextBox>
+
+                    <!-- Giá -->
+                    <TextBlock Text="Giá (VND) *" FontSize="12" FontWeight="SemiBold"
+                               Foreground="#64748b" Margin="0,0,0,6"/>
+                    <TextBox x:Name="TxtPrice" Padding="12,10" FontSize="14"
+                             Background="#f8fafc" BorderBrush="#e2e8f0" BorderThickness="1"
+                             Foreground="#1e293b" Margin="0,0,0,14">
+                        <TextBox.Resources>
+                            <Style TargetType="Border">
+                                <Setter Property="CornerRadius" Value="8"/>
+                            </Style>
+                        </TextBox.Resources>
+                    </TextBox>
+
+                    <!-- Danh mục -->
+                    <TextBlock Text="Danh mục *" FontSize="12" FontWeight="SemiBold"
+                               Foreground="#64748b" Margin="0,0,0,6"/>
+                    <ComboBox x:Name="CbCategory" Padding="12,10" FontSize="14"
+                              Background="#f8fafc" BorderBrush="#e2e8f0" Margin="0,0,0,14"/>
+
+                    <!-- Trạng thái -->
+                    <CheckBox x:Name="ChkAvailable" Content="✅ Đang phục vụ (hiển thị trong menu)"
+                              IsChecked="True" FontSize="13" Foreground="#475569"/>
+
+                    <!-- Lỗi -->
+                    <Border x:Name="ErrorBox" Background="#fef2f2" BorderBrush="#fecaca"
+                            BorderThickness="1" CornerRadius="8" Padding="12,8"
+                            Margin="0,12,0,0" Visibility="Collapsed">
+                        <TextBlock x:Name="TxtError" Text="" Foreground="#ef4444"
+                                   FontSize="13" TextWrapping="Wrap"/>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Buttons -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom" Margin="0,0,20,16">
+            <Button Content="Hủy" Click="BtnCancel_Click"
+                    Background="#f1f5f9" Foreground="#475569" BorderThickness="0"
+                    Padding="20,10" FontSize="14" Cursor="Hand" Margin="0,0,10,0">
+                <Button.Resources>
+                    <Style TargetType="Border">
+                        <Setter Property="CornerRadius" Value="8"/>
+                    </Style>
+                </Button.Resources>
+            </Button>
+            <Button Content="💾 Lưu món ăn" Click="BtnSave_Click"
+                    Background="#3b82f6" Foreground="White" BorderThickness="0"
+                    Padding="20,10" FontSize="14" FontWeight="SemiBold" Cursor="Hand">
+                <Button.Resources>
+                    <Style TargetType="Border">
+                        <Setter Property="CornerRadius" Value="8"/>
+                    </Style>
+                </Button.Resources>
+            </Button>
+        </StackPanel>
+    </Grid>
+</Window>
