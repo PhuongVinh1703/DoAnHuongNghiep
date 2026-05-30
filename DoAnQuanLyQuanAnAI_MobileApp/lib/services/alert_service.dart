@@ -22,7 +22,7 @@ class AlertService {
     int page = 1,
   }) async {
     try {
-      var query = _db.from('Alerts').select('*, Accounts(FullName), Orders(TableId, DiningTables(BranchId, Name, Branches(BranchId, Name)))');
+      var query = _db.from('Alerts').select('*, Accounts(FullName), Orders(TableId, DiningTables(BranchId, TableName, Branches(BranchId, Name)))');
       
       if (resolved != null) {
         query = query.eq('IsResolved', resolved);
@@ -53,7 +53,7 @@ class AlertService {
     try {
       final res = await _db
           .from('Alerts')
-          .select('*, Accounts(FullName), Orders(TableId, DiningTables(BranchId, Name, Branches(BranchId, Name)))')
+          .select('*, Accounts(FullName), Orders(TableId, DiningTables(BranchId, TableName, Branches(BranchId, Name)))')
           .eq('AlertId', id)
           .single();
       return ApiResult.success(Alert.fromJson(res));
