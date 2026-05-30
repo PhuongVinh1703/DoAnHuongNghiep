@@ -426,19 +426,52 @@ class _AlertCard extends StatelessWidget {
             const SizedBox(height: 12),
 
             // Footer
-            Row(
+            Column(
               children: [
-                Icon(Icons.store_rounded, size: 14, color: AppColors.onSurfaceVariant),
-                const SizedBox(width: 4),
-                Text(alert.branchName ?? 'Hệ thống', style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
-                const SizedBox(width: 12),
-                Icon(Icons.person_outline_rounded, size: 14, color: AppColors.onSurfaceVariant),
-                const SizedBox(width: 4),
-                Text(alert.staffName ?? 'Hệ thống', style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
-                const Spacer(),
-                Text(
-                  '${DateFormat('dd/MM/yyyy').format(alert.createdAt)} · ${DateFormat('HH:mm').format(alert.createdAt)}',
-                  style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
+                Row(
+                  children: [
+                    Icon(Icons.store_rounded, size: 14, color: AppColors.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        alert.branchName ?? 'Hệ thống',
+                        style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Icon(Icons.person_outline_rounded, size: 14, color: AppColors.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        alert.staffName ?? 'Hệ thống',
+                        style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Divider(height: 1, thickness: 0.5),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.access_time_rounded, size: 14, color: AppColors.onSurfaceVariant.withAlpha(180)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Thời gian ghi nhận',
+                          style: TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant.withAlpha(180)),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '${DateFormat('dd/MM/yyyy').format(alert.createdAt)} · ${DateFormat('HH:mm').format(alert.createdAt)}',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.onSurfaceVariant),
+                    ),
+                  ],
                 ),
               ],
             ),
