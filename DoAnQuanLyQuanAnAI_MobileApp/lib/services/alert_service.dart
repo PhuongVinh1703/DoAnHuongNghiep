@@ -1,5 +1,3 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:doanquanlyquananai_mobileapp/core/network/api_response.dart';
 import 'package:doanquanlyquananai_mobileapp/models/alert/alert.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -13,11 +11,7 @@ class AlertService {
   ));
 
   String get _aiBaseUrl {
-    if (kIsWeb) return 'http://localhost:5050';
-    try {
-      if (Platform.isAndroid) return 'http://10.0.2.2:5050';
-    } catch (_) {}
-    return 'http://localhost:5050';
+    return 'https://module-ai-myproject.onrender.com';
   }
 
   Future<ApiResult<List<Alert>>> getAlerts({

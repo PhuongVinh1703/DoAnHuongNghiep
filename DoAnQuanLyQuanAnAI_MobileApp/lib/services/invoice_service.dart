@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:doanquanlyquananai_mobileapp/core/network/api_response.dart';
 import 'package:doanquanlyquananai_mobileapp/core/utils/ai_tracker.dart';
@@ -15,11 +14,7 @@ class InvoiceService {
   ));
 
   String get _aiBaseUrl {
-    if (kIsWeb) return 'http://localhost:5050';
-    try {
-      if (Platform.isAndroid) return 'http://10.0.2.2:5050';
-    } catch (_) {}
-    return 'http://localhost:5050';
+    return 'https://module-ai-myproject.onrender.com';
   }
 
   /// Lấy lịch sử hóa đơn của một khách hàng
