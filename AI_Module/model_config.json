@@ -7,18 +7,22 @@
     "checkout_time_sec",
     "void_count",
     "discount_percent",
-    "add_remove_ratio"
+    "add_remove_ratio",
+    "items_removed_after_confirm"
   ],
   "anomaly_threshold": 0.5,
   "high_risk": 0.75,
   "anomaly_types": [
+    "AddRemoveAnomaly",
     "CancelAfterPayment",
     "ExcessiveDiscount",
     "FrequentCancellation",
     "SpeedAnomaly",
     "UnusualHours"
   ],
-  "model_version": "2.0",
+  "model_version": "3.0",
   "auc_score": 1.0,
-  "cv_f1_mean": 1.0
+  "cv_f1_mean": 1.0,
+  "training_samples": 11960,
+  "anomaly_samples": 4960
 }
