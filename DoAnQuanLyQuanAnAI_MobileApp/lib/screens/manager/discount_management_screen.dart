@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_theme.dart';
 import 'package:doanquanlyquananai_mobileapp/services/discount_service.dart';
 import 'package:doanquanlyquananai_mobileapp/models/discount/discount_campaign.dart';
 import 'package:doanquanlyquananai_mobileapp/widgets/common/app_snackbar.dart';
 import 'package:doanquanlyquananai_mobileapp/core/utils/money_formatter.dart';
+import 'package:doanquanlyquananai_mobileapp/services/auth_service.dart';
+import 'package:doanquanlyquananai_mobileapp/config/constants.dart';
 import 'package:intl/intl.dart';
 
 class DiscountManagementScreen extends StatefulWidget {
@@ -63,6 +66,25 @@ class _DiscountManagementScreenState extends State<DiscountManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = context.read<AuthService>().currentUser;
+    if (user?.role != AppConstants.roleOwner) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Quản lý Khuyến Mãi', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+        ),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Text(
+              'Bạn không có quyền truy cập hoặc chỉnh sửa chiến dịch khuyến mãi.',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.surface,
       appBar: AppBar(

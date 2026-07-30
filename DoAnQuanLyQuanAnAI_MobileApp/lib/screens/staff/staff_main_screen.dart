@@ -38,7 +38,10 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
     final user = context.read<AuthService>().currentUser;
     if (user != null) {
       final branchId = user.branchId ?? 1;
-      await context.read<BookingNotificationProvider>().fetchStaffTasks(user.fullName, branchId);
+      await context.read<BookingNotificationProvider>().fetchStaffTasks(
+        user.fullName,
+        branchId,
+      );
     }
   }
 
@@ -48,7 +51,9 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
       try {
         final res = await BranchService().getBranches();
         if (res.isSuccess && res.data != null) {
-          final branch = res.data!.firstWhere((b) => b.branchId == user!.branchId);
+          final branch = res.data!.firstWhere(
+            (b) => b.branchId == user!.branchId,
+          );
           setState(() => _branchName = branch.name);
         }
       } catch (_) {}
@@ -67,7 +72,10 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
     if (user == null) return;
 
     // Refresh tasks when opening bottom sheet
-    parentContext.read<BookingNotificationProvider>().fetchStaffTasks(user.fullName, user.branchId ?? 1);
+    parentContext.read<BookingNotificationProvider>().fetchStaffTasks(
+      user.fullName,
+      user.branchId ?? 1,
+    );
 
     showModalBottomSheet(
       context: parentContext,
@@ -76,7 +84,9 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
       builder: (context) {
         return MultiProvider(
           providers: [
-            ChangeNotifierProvider.value(value: parentContext.read<BookingNotificationProvider>()),
+            ChangeNotifierProvider.value(
+              value: parentContext.read<BookingNotificationProvider>(),
+            ),
           ],
           child: Consumer<BookingNotificationProvider>(
             builder: (context, notiProvider, child) {
@@ -140,29 +150,41 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
                               color: Colors.grey[200],
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.close, size: 18, color: Colors.black54),
+                            child: const Icon(
+                              Icons.close,
+                              size: 18,
+                              color: Colors.black54,
+                            ),
                           ),
                           onPressed: () => Navigator.pop(context),
                         ),
                       ],
                     ),
                     const Divider(height: 24, thickness: 1),
-                    
+
                     if (notiProvider.isLoading)
                       const Expanded(
                         child: Center(
-                          child: CircularProgressIndicator(color: AppColors.primary),
+                          child: CircularProgressIndicator(
+                            color: AppColors.primary,
+                          ),
                         ),
                       )
                     else if (notiProvider.assignedTasks.isEmpty)
                       Expanded(
                         child: RefreshIndicator(
-                          onRefresh: () => notiProvider.fetchStaffTasks(user.fullName, user.branchId ?? 1),
+                          onRefresh: () => notiProvider.fetchStaffTasks(
+                            user.fullName,
+                            user.branchId ?? 1,
+                          ),
                           color: AppColors.primary,
                           child: ListView(
                             physics: const AlwaysScrollableScrollPhysics(),
                             children: [
-                              SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+                              SizedBox(
+                                height:
+                                    MediaQuery.of(context).size.height * 0.2,
+                              ),
                               const Icon(
                                 Icons.assignment_turned_in_outlined,
                                 size: 70,
@@ -199,14 +221,20 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
                     else
                       Expanded(
                         child: RefreshIndicator(
-                          onRefresh: () => notiProvider.fetchStaffTasks(user.fullName, user.branchId ?? 1),
+                          onRefresh: () => notiProvider.fetchStaffTasks(
+                            user.fullName,
+                            user.branchId ?? 1,
+                          ),
                           color: AppColors.primary,
                           child: ListView.builder(
                             physics: const AlwaysScrollableScrollPhysics(),
                             itemCount: notiProvider.assignedTasks.length,
                             itemBuilder: (context, index) {
-                              final reservation = notiProvider.assignedTasks[index];
-                              return TaskReservationCard(reservation: reservation);
+                              final reservation =
+                                  notiProvider.assignedTasks[index];
+                              return TaskReservationCard(
+                                reservation: reservation,
+                              );
                             },
                           ),
                         ),
@@ -231,21 +259,27 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
       backgroundColor: AppColors.surface,
       appBar: AppBar(
         automaticallyImplyLeading: false,
+        leading: Navigator.canPop(context)
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => Navigator.maybePop(context),
+              )
+            : null,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               AppConstants.appName,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             if (user != null)
               Text(
                 '${user.fullName}${_branchName != null ? ' - $_branchName' : (user.branchId != null ? ' - Chi nhánh ${user.branchId}' : '')}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.onSurfaceVariant,
-                    ),
+                  color: AppColors.onSurfaceVariant,
+                ),
               ),
           ],
         ),
@@ -346,13 +380,17 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
       if (endTasksIndex == -1) {
         endTasksIndex = note.length;
       }
-      
+
       String tasksStr = note.substring(tasksIndex + 9, endTasksIndex).trim();
       if (tasksStr.endsWith('.')) {
         tasksStr = tasksStr.substring(0, tasksStr.length - 1);
       }
       if (tasksStr.isNotEmpty) {
-        tasks = tasksStr.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+        tasks = tasksStr
+            .split(',')
+            .map((t) => t.trim())
+            .where((t) => t.isNotEmpty)
+            .toList();
       }
     }
 
@@ -376,33 +414,51 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
     final List<String> tasks = List<String>.from(parsed['tasks'] ?? []);
     final customNote = parsed['customNote'] as String;
 
-    final revenueTasks = tasks.where((t) => 
-      t.toLowerCase().contains('upsell') || 
-      t.toLowerCase().contains('tráng miệng') || 
-      t.toLowerCase().contains('vip') || 
-      t.toLowerCase().contains('tư vấn') ||
-      t.toLowerCase().contains('doanh thu')
-    ).toList();
+    final revenueTasks = tasks
+        .where(
+          (t) =>
+              t.toLowerCase().contains('upsell') ||
+              t.toLowerCase().contains('tráng miệng') ||
+              t.toLowerCase().contains('vip') ||
+              t.toLowerCase().contains('tư vấn') ||
+              t.toLowerCase().contains('doanh thu'),
+        )
+        .toList();
 
-    final experienceTasks = tasks.where((t) => 
-      t.toLowerCase().contains('bàn sạch') || 
-      t.toLowerCase().contains('đón') || 
-      t.toLowerCase().contains('pre-order') ||
-      t.toLowerCase().contains('ra món') ||
-      t.toLowerCase().contains('trải nghiệm')
-    ).toList();
+    final experienceTasks = tasks
+        .where(
+          (t) =>
+              t.toLowerCase().contains('bàn sạch') ||
+              t.toLowerCase().contains('đón') ||
+              t.toLowerCase().contains('pre-order') ||
+              t.toLowerCase().contains('ra món') ||
+              t.toLowerCase().contains('trải nghiệm'),
+        )
+        .toList();
 
-    final commonTasks = tasks.where((t) => 
-      !revenueTasks.contains(t) && !experienceTasks.contains(t)
-    ).toList();
+    final commonTasks = tasks
+        .where((t) => !revenueTasks.contains(t) && !experienceTasks.contains(t))
+        .toList();
 
-    final reservedHour = widget.reservation.reservedAt.hour.toString().padLeft(2, '0');
-    final reservedMinute = widget.reservation.reservedAt.minute.toString().padLeft(2, '0');
-    final reservedDay = widget.reservation.reservedAt.day.toString().padLeft(2, '0');
-    final reservedMonth = widget.reservation.reservedAt.month.toString().padLeft(2, '0');
-    final reservedTimeStr = '$reservedHour:$reservedMinute - $reservedDay/$reservedMonth';
+    final reservedHour = widget.reservation.reservedAt.hour.toString().padLeft(
+      2,
+      '0',
+    );
+    final reservedMinute = widget.reservation.reservedAt.minute
+        .toString()
+        .padLeft(2, '0');
+    final reservedDay = widget.reservation.reservedAt.day.toString().padLeft(
+      2,
+      '0',
+    );
+    final reservedMonth = widget.reservation.reservedAt.month
+        .toString()
+        .padLeft(2, '0');
+    final reservedTimeStr =
+        '$reservedHour:$reservedMinute - $reservedDay/$reservedMonth';
 
-    final allCompleted = _checkedTasks.isNotEmpty && _checkedTasks.values.every((val) => val);
+    final allCompleted =
+        _checkedTasks.isNotEmpty && _checkedTasks.values.every((val) => val);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -410,8 +466,8 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: allCompleted 
-              ? AppColors.success.withValues(alpha: 0.3) 
+          color: allCompleted
+              ? AppColors.success.withValues(alpha: 0.3)
               : AppColors.primary.withValues(alpha: 0.2),
           width: 1.5,
         ),
@@ -430,17 +486,19 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              color: allCompleted 
-                  ? AppColors.success.withValues(alpha: 0.08) 
+              color: allCompleted
+                  ? AppColors.success.withValues(alpha: 0.08)
                   : AppColors.primary.withValues(alpha: 0.05),
               child: Row(
                 children: [
                   CircleAvatar(
-                    backgroundColor: allCompleted ? AppColors.success : AppColors.primary,
+                    backgroundColor: allCompleted
+                        ? AppColors.success
+                        : AppColors.primary,
                     radius: 16,
                     child: Icon(
-                      allCompleted ? Icons.check : Icons.restaurant_rounded, 
-                      color: Colors.white, 
+                      allCompleted ? Icons.check : Icons.restaurant_rounded,
+                      color: Colors.white,
                       size: 16,
                     ),
                   ),
@@ -469,7 +527,10 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
@@ -487,13 +548,17 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
                 ],
               ),
             ),
-            
+
             if (shift.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(left: 16, right: 16, top: 10),
                 child: Row(
                   children: [
-                    Icon(Icons.watch_later_outlined, size: 14, color: Colors.grey[600]),
+                    Icon(
+                      Icons.watch_later_outlined,
+                      size: 14,
+                      color: Colors.grey[600],
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       shift,
@@ -515,7 +580,11 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
                   if (revenueTasks.isNotEmpty) ...[
                     Row(
                       children: [
-                        const Icon(Icons.trending_up_rounded, size: 16, color: AppColors.secondary),
+                        const Icon(
+                          Icons.trending_up_rounded,
+                          size: 16,
+                          color: AppColors.secondary,
+                        ),
                         const SizedBox(width: 6),
                         const Text(
                           'Tối ưu doanh thu (Lợi nhuận)',
@@ -535,7 +604,11 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
                   if (experienceTasks.isNotEmpty) ...[
                     Row(
                       children: [
-                        const Icon(Icons.favorite_rounded, size: 16, color: AppColors.primary),
+                        const Icon(
+                          Icons.favorite_rounded,
+                          size: 16,
+                          color: AppColors.primary,
+                        ),
                         const SizedBox(width: 6),
                         const Text(
                           'Tối ưu trải nghiệm (Giữ chân khách)',
@@ -555,7 +628,11 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
                   if (commonTasks.isNotEmpty) ...[
                     Row(
                       children: [
-                        const Icon(Icons.assignment_outlined, size: 16, color: Colors.blueGrey),
+                        const Icon(
+                          Icons.assignment_outlined,
+                          size: 16,
+                          color: Colors.blueGrey,
+                        ),
                         const SizedBox(width: 6),
                         const Text(
                           'Nhiệm vụ phục vụ bàn',
@@ -589,7 +666,11 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.feedback_outlined, size: 16, color: Color(0xFFB78103)),
+                          const Icon(
+                            Icons.feedback_outlined,
+                            size: 16,
+                            color: Color(0xFFB78103),
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Column(
@@ -621,7 +702,8 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
                     const SizedBox(height: 8),
                   ],
 
-                  if (widget.reservation.note != null && widget.reservation.note!.isNotEmpty) ...[
+                  if (widget.reservation.note != null &&
+                      widget.reservation.note!.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Container(
                       width: double.infinity,
@@ -634,7 +716,11 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.notes_rounded, size: 16, color: Colors.grey[600]),
+                          Icon(
+                            Icons.notes_rounded,
+                            size: 16,
+                            color: Colors.grey[600],
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Column(
@@ -687,7 +773,9 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
         child: Row(
           children: [
             Icon(
-              isChecked ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+              isChecked
+                  ? Icons.check_box_rounded
+                  : Icons.check_box_outline_blank_rounded,
               color: isChecked ? AppColors.success : Colors.grey[400],
               size: 20,
             ),

@@ -9,6 +9,9 @@ import 'package:doanquanlyquananai_mobileapp/l10n/app_localizations.dart';
 import 'package:doanquanlyquananai_mobileapp/services/order_provider.dart';
 import 'package:doanquanlyquananai_mobileapp/services/auth_service.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/staff/menu_order_screen.dart';
+import 'package:doanquanlyquananai_mobileapp/services/branch_service.dart';
+import 'package:doanquanlyquananai_mobileapp/models/branch/branch.dart';
+import 'package:doanquanlyquananai_mobileapp/config/constants.dart';
 
 class StaffTablesScreen extends StatefulWidget {
   const StaffTablesScreen({super.key});
@@ -19,14 +22,70 @@ class StaffTablesScreen extends StatefulWidget {
 
 class _StaffTablesScreenState extends State<StaffTablesScreen> {
   String _selectedFilter = 'All';
+  bool _isOwner = false;
+  List<Branch> _branches = [];
+  int? _selectedBranchId;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final branchId = context.read<AuthService>().currentUser?.branchId;
-      context.read<TableProvider>().loadTables(branchId: branchId);
+      _initData();
     });
+  }
+
+  Future<void> _initData() async {
+    final auth = context.read<AuthService>();
+    final user = auth.currentUser;
+    _isOwner = (user?.role == AppConstants.roleOwner);
+
+    if (_isOwner) {
+      final res = await BranchService().getBranches();
+      if (res.isSuccess && res.data != null && res.data!.isNotEmpty) {
+        setState(() {
+          _branches = res.data!;
+          _selectedBranchId = _branches.first.branchId;
+        });
+      }
+    } else {
+      _selectedBranchId = user?.branchId;
+    }
+    
+    if (mounted) {
+      context.read<TableProvider>().loadTables(branchId: _selectedBranchId);
+    }
+  }
+
+  Widget _buildBranchFilter() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppTheme.marginMobile, vertical: 8),
+      color: Colors.white,
+      child: Row(
+        children: [
+          const Icon(Icons.store_rounded, color: AppColors.primary, size: 20),
+          const SizedBox(width: 8),
+          const Text('Chi nhánh:', style: TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: DropdownButton<int?>(
+              value: _selectedBranchId,
+              isExpanded: true,
+              underline: const SizedBox(),
+              items: _branches.map((b) => DropdownMenuItem<int?>(
+                    value: b.branchId,
+                    child: Text(b.name),
+                  )).toList(),
+              onChanged: (val) {
+                setState(() {
+                  _selectedBranchId = val;
+                });
+                context.read<TableProvider>().loadTables(branchId: val);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -52,6 +111,7 @@ class _StaffTablesScreenState extends State<StaffTablesScreen> {
 
         return Column(
       children: [
+        if (_isOwner) _buildBranchFilter(),
         // ─── Header Stats ──────────────────────────────
         Container(
           padding: const EdgeInsets.fromLTRB(AppTheme.marginMobile, 8, AppTheme.marginMobile, 16),
@@ -257,8 +317,7 @@ class _TableCard extends StatelessWidget {
           
           // Khi quay trở lại (từ việc đóng màn hình hoặc thanh toán), tải lại danh sách bàn thực tế từ server
           if (context.mounted) {
-            final branchId = authService.currentUser?.branchId;
-            tableProvider.loadTables(branchId: branchId);
+            tableProvider.loadTables(branchId: table.branchId);
           }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(

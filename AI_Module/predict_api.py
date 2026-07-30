@@ -178,6 +178,22 @@ def predict():
             if risk == "LOW":
                 risk = "MEDIUM"
 
+        # Rule 4.3: Thanh toán siêu tốc (Session duration < 120 giây)
+        session_duration = float(data.get("session_duration", 0))
+        if 0 < session_duration < 120.0:
+            is_anomaly = True
+            rules_triggered.append("SpeedAnomaly")
+
+            if not any(a["type"] == "SpeedAnomaly" for a in anomalies):
+                anomalies.append({
+                    "type":    "SpeedAnomaly",
+                    "type_vn": ANOMALY_TYPE_VN["SpeedAnomaly"],
+                    "score":   0.95,
+                    "source":  "rule",
+                })
+
+            risk = "HIGH"
+
         # ── Bước 5: Tính proba cuối để trả về ──────────────────
         # Giữ nguyên AI score (proba) làm điểm chính cho audit log.
         # Nếu rule can thiệp mà AI không phát hiện (proba thấp),

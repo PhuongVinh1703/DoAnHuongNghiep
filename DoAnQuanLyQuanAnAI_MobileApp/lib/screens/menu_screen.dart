@@ -8,18 +8,20 @@ import 'package:doanquanlyquananai_mobileapp/models/menu/menu_category.dart';
 import 'package:doanquanlyquananai_mobileapp/l10n/app_localizations.dart';
 
 class MenuScreen extends StatefulWidget {
-  const MenuScreen({super.key});
+  final int initialCategoryId;
+  const MenuScreen({super.key, this.initialCategoryId = 0});
 
   @override
   State<MenuScreen> createState() => _MenuScreenState();
 }
 
 class _MenuScreenState extends State<MenuScreen> {
-  int _selectedCategoryId = 0; // 0 for All
+  late int _selectedCategoryId;
 
   @override
   void initState() {
     super.initState();
+    _selectedCategoryId = widget.initialCategoryId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<MenuProvider>().loadMenuData();
     });

@@ -6,6 +6,8 @@ class AiTracker {
   int _removedAfterConfirm = 0;
   bool _hasConfirmed = false;
 
+  double? _cancelRate;
+
   AiTracker();
 
   AiTracker.fromRaw({
@@ -15,12 +17,14 @@ class AiTracker {
     int totalRemoved = 0,
     int removedAfterConfirm = 0,
     bool hasConfirmed = false,
+    double? cancelRate,
   })  : _orderStartTime = startTime,
         _voidCount = voidCount,
         _totalAdded = totalAdded,
         _totalRemoved = totalRemoved,
         _removedAfterConfirm = removedAfterConfirm,
-        _hasConfirmed = hasConfirmed;
+        _hasConfirmed = hasConfirmed,
+        _cancelRate = cancelRate;
 
   void startOrder() => _orderStartTime ??= DateTime.now();
   
@@ -55,6 +59,7 @@ class AiTracker {
   
   int get voidCount => _voidCount;
   int get itemsRemovedAfterConfirm => _removedAfterConfirm;
+  double get cancelRate => _cancelRate ?? 0.0;
 
   void reset() {
     _orderStartTime = null;
@@ -63,5 +68,6 @@ class AiTracker {
     _totalRemoved = 0;
     _removedAfterConfirm = 0;
     _hasConfirmed = false;
+    _cancelRate = null;
   }
 }

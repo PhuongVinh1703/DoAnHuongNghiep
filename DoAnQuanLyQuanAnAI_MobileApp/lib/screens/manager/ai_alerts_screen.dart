@@ -8,6 +8,7 @@ import 'package:doanquanlyquananai_mobileapp/services/branch_service.dart';
 import 'package:doanquanlyquananai_mobileapp/models/branch/branch.dart';
 import 'package:doanquanlyquananai_mobileapp/widgets/common/app_snackbar.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AiAlertsScreen extends StatefulWidget {
   const AiAlertsScreen({super.key});
@@ -28,14 +29,43 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
   bool _isLoading = true;
   bool _isRetraining = false;
 
+  RealtimeChannel? _realtimeChannel;
+
   @override
   void initState() {
     super.initState();
     _loadData();
+    _setupRealtime();
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+  @override
+  void dispose() {
+    if (_realtimeChannel != null) {
+      Supabase.instance.client.removeChannel(_realtimeChannel!);
+    }
+    super.dispose();
+  }
+
+  void _setupRealtime() {
+    _realtimeChannel = Supabase.instance.client
+        .channel('alerts-realtime-channel')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'Alerts',
+          callback: (payload) {
+            if (mounted) {
+              _loadData(showLoading: false);
+            }
+          },
+        );
+    _realtimeChannel!.subscribe();
+  }
+
+  Future<void> _loadData({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() => _isLoading = true);
+    }
 
     // Load branches
     final branchResult = await _branchSvc.getBranches();
@@ -49,7 +79,10 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
       _alerts = alertsResult.data ?? [];
     } else {
       if (mounted) {
-        AppSnackbar.showError(context, alertsResult.error ?? 'Lỗi tải cảnh báo');
+        AppSnackbar.showError(
+          context,
+          alertsResult.error ?? 'Lỗi tải cảnh báo',
+        );
       }
     }
 
@@ -59,7 +92,10 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
   Future<void> _retrainAi() async {
     setState(() => _isRetraining = true);
     if (mounted) {
-      AppSnackbar.showWarning(context, 'Đang gửi yêu cầu huấn luyện lại AI module...');
+      AppSnackbar.showWarning(
+        context,
+        'Đang gửi yêu cầu huấn luyện lại AI module...',
+      );
     }
 
     final result = await _alertSvc.triggerRetrain();
@@ -67,10 +103,16 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
 
     if (mounted) {
       if (result.isSuccess) {
-        AppSnackbar.showSuccess(context, 'Huấn luyện lại AI module thành công! Dữ liệu đã được cập nhật.');
+        AppSnackbar.showSuccess(
+          context,
+          'Huấn luyện lại AI module thành công! Dữ liệu đã được cập nhật.',
+        );
         _loadData(); // Reload alerts
       } else {
-        AppSnackbar.showError(context, result.error ?? 'Lỗi khi huấn luyện lại AI.');
+        AppSnackbar.showError(
+          context,
+          result.error ?? 'Lỗi khi huấn luyện lại AI.',
+        );
       }
     }
   }
@@ -106,7 +148,9 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
     double avgScore = 0.0;
     final scoredAlerts = _alerts.where((a) => a.anomalyScore != null).toList();
     if (scoredAlerts.isNotEmpty) {
-      avgScore = scoredAlerts.fold<double>(0.0, (sum, a) => sum + a.anomalyScore!) / scoredAlerts.length;
+      avgScore =
+          scoredAlerts.fold<double>(0.0, (sum, a) => sum + a.anomalyScore!) /
+          scoredAlerts.length;
     }
 
     return Scaffold(
@@ -119,7 +163,10 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
                 ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primary,
+                    ),
                   )
                 : const Icon(Icons.model_training_rounded),
             tooltip: 'Retrain AI Module',
@@ -135,9 +182,20 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.notifications_active_rounded, size: 16, color: AppColors.error),
+                Icon(
+                  Icons.notifications_active_rounded,
+                  size: 16,
+                  color: AppColors.error,
+                ),
                 const SizedBox(width: 4),
-                Text('$unreadCount new', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.error)),
+                Text(
+                  '$unreadCount new',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.error,
+                  ),
+                ),
               ],
             ),
           ),
@@ -151,7 +209,10 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
                 children: [
                   // ─── Summary Cards ────────────────────────
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppTheme.marginMobile, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppTheme.marginMobile,
+                      vertical: 8,
+                    ),
                     child: Row(
                       children: [
                         _SummaryCard(
@@ -183,7 +244,9 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
                     height: 44,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: AppTheme.marginMobile),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.marginMobile,
+                      ),
                       children: ['All', 'High', 'Medium', 'Low'].map((f) {
                         final isSelected = _selectedFilter == f;
                         return Padding(
@@ -191,16 +254,25 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
                           child: FilterChip(
                             label: Text(f),
                             selected: isSelected,
-                            onSelected: (_) => setState(() => _selectedFilter = f),
+                            onSelected: (_) =>
+                                setState(() => _selectedFilter = f),
                             selectedColor: AppColors.primary.withAlpha(25),
                             checkmarkColor: AppColors.primary,
                             labelStyle: TextStyle(
-                              color: isSelected ? AppColors.primary : AppColors.onSurfaceVariant,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.onSurfaceVariant,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
                               fontSize: 13,
                             ),
                             backgroundColor: AppColors.surfaceContainerLowest,
-                            side: BorderSide(color: isSelected ? AppColors.primary : AppColors.outlineVariant),
+                            side: BorderSide(
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.outlineVariant,
+                            ),
                             shape: const StadiumBorder(),
                           ),
                         );
@@ -213,23 +285,34 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
                     height: 44,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: AppTheme.marginMobile),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.marginMobile,
+                      ),
                       children: [
                         Padding(
                           padding: const EdgeInsets.only(right: 8),
                           child: FilterChip(
                             label: const Text('Tất cả chi nhánh'),
                             selected: _selectedBranchId == null,
-                            onSelected: (_) => setState(() => _selectedBranchId = null),
+                            onSelected: (_) =>
+                                setState(() => _selectedBranchId = null),
                             selectedColor: AppColors.primary.withAlpha(25),
                             checkmarkColor: AppColors.primary,
                             labelStyle: TextStyle(
-                              color: _selectedBranchId == null ? AppColors.primary : AppColors.onSurfaceVariant,
-                              fontWeight: _selectedBranchId == null ? FontWeight.w600 : FontWeight.w400,
+                              color: _selectedBranchId == null
+                                  ? AppColors.primary
+                                  : AppColors.onSurfaceVariant,
+                              fontWeight: _selectedBranchId == null
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
                               fontSize: 13,
                             ),
                             backgroundColor: AppColors.surfaceContainerLowest,
-                            side: BorderSide(color: _selectedBranchId == null ? AppColors.primary : AppColors.outlineVariant),
+                            side: BorderSide(
+                              color: _selectedBranchId == null
+                                  ? AppColors.primary
+                                  : AppColors.outlineVariant,
+                            ),
                             shape: const StadiumBorder(),
                           ),
                         ),
@@ -240,16 +323,26 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
                             child: FilterChip(
                               label: Text(b.name),
                               selected: isSelected,
-                              onSelected: (_) => setState(() => _selectedBranchId = b.branchId),
+                              onSelected: (_) => setState(
+                                () => _selectedBranchId = b.branchId,
+                              ),
                               selectedColor: AppColors.primary.withAlpha(25),
                               checkmarkColor: AppColors.primary,
                               labelStyle: TextStyle(
-                                color: isSelected ? AppColors.primary : AppColors.onSurfaceVariant,
-                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : AppColors.onSurfaceVariant,
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
                                 fontSize: 13,
                               ),
                               backgroundColor: AppColors.surfaceContainerLowest,
-                              side: BorderSide(color: isSelected ? AppColors.primary : AppColors.outlineVariant),
+                              side: BorderSide(
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : AppColors.outlineVariant,
+                              ),
                               shape: const StadiumBorder(),
                             ),
                           );
@@ -263,12 +356,18 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
                   // ─── Alert List ────────────────────────────
                   Expanded(
                     child: _filteredAlerts.isEmpty
-                        ? const Center(child: Text('Không có cảnh báo nào phù hợp'))
+                        ? const Center(
+                            child: Text('Không có cảnh báo nào phù hợp'),
+                          )
                         : ListView.separated(
-                            padding: const EdgeInsets.symmetric(horizontal: AppTheme.marginMobile),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppTheme.marginMobile,
+                            ),
                             itemCount: _filteredAlerts.length,
-                            separatorBuilder: (context, index) => const SizedBox(height: 12),
-                            itemBuilder: (context, index) => _AlertCard(alert: _filteredAlerts[index]),
+                            separatorBuilder: (context, index) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (context, index) =>
+                                _AlertCard(alert: _filteredAlerts[index]),
                           ),
                   ),
                 ],
@@ -285,7 +384,13 @@ class _SummaryCard extends StatelessWidget {
   final String? countText;
   final Color color;
 
-  const _SummaryCard({required this.icon, required this.label, this.count, this.countText, required this.color});
+  const _SummaryCard({
+    required this.icon,
+    required this.label,
+    this.count,
+    this.countText,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -304,9 +409,20 @@ class _SummaryCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               countText ?? '$count',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: color),
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
             ),
-            Text(label, style: TextStyle(fontSize: 11, color: color.withAlpha(180), fontWeight: FontWeight.w500)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: color.withAlpha(180),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
@@ -344,10 +460,14 @@ class _AlertCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isUnread ? riskColor.withAlpha(8) : AppColors.surfaceContainerLowest,
+        color: isUnread
+            ? riskColor.withAlpha(8)
+            : AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(
-          color: isUnread ? riskColor.withAlpha(60) : AppColors.outlineVariant.withAlpha(60),
+          color: isUnread
+              ? riskColor.withAlpha(60)
+              : AppColors.outlineVariant.withAlpha(60),
           width: isUnread ? 1.5 : 1,
         ),
         boxShadow: AppTheme.shadowLevel1,
@@ -363,10 +483,19 @@ class _AlertCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [riskColor.withAlpha(30), riskColor.withAlpha(15)]),
+                    gradient: LinearGradient(
+                      colors: [
+                        riskColor.withAlpha(30),
+                        riskColor.withAlpha(15),
+                      ],
+                    ),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(Icons.psychology_rounded, size: 20, color: riskColor),
+                  child: Icon(
+                    Icons.psychology_rounded,
+                    size: 20,
+                    color: riskColor,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -375,16 +504,33 @@ class _AlertCard extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Text('ALT-${alert.alertId.toString().padLeft(4, '0')}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.onSurfaceVariant)),
+                          Text(
+                            'ALT-${alert.alertId.toString().padLeft(4, '0')}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.onSurfaceVariant,
+                            ),
+                          ),
                           const SizedBox(width: 8),
                           if (isUnread)
                             Container(
-                              width: 8, height: 8,
-                              decoration: BoxDecoration(color: riskColor, shape: BoxShape.circle),
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: riskColor,
+                                shape: BoxShape.circle,
+                              ),
                             ),
                         ],
                       ),
-                      Text(alert.alertTypeName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      Text(
+                        alert.alertTypeName,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -397,7 +543,10 @@ class _AlertCard extends StatelessWidget {
             // Description
             Text(
               alert.description,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.onSurfaceVariant, height: 1.5),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.onSurfaceVariant,
+                height: 1.5,
+              ),
             ),
 
             const SizedBox(height: 14),
@@ -405,7 +554,13 @@ class _AlertCard extends StatelessWidget {
             // Score bar
             Row(
               children: [
-                Text('AI Confidence', style: TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant)),
+                Text(
+                  'AI Confidence',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: ClipRRect(
@@ -419,7 +574,14 @@ class _AlertCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text('${(score * 100).toInt()}%', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: riskColor)),
+                Text(
+                  '${(score * 100).toInt()}%',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: riskColor,
+                  ),
+                ),
               ],
             ),
 
@@ -430,22 +592,36 @@ class _AlertCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.store_rounded, size: 14, color: AppColors.onSurfaceVariant),
+                    Icon(
+                      Icons.store_rounded,
+                      size: 14,
+                      color: AppColors.onSurfaceVariant,
+                    ),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
                         alert.branchName ?? 'Hệ thống',
-                        style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.onSurfaceVariant,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Icon(Icons.person_outline_rounded, size: 14, color: AppColors.onSurfaceVariant),
+                    Icon(
+                      Icons.person_outline_rounded,
+                      size: 14,
+                      color: AppColors.onSurfaceVariant,
+                    ),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
                         alert.staffName ?? 'Hệ thống',
-                        style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.onSurfaceVariant,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -459,17 +635,28 @@ class _AlertCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.access_time_rounded, size: 14, color: AppColors.onSurfaceVariant.withAlpha(180)),
+                        Icon(
+                          Icons.access_time_rounded,
+                          size: 14,
+                          color: AppColors.onSurfaceVariant.withAlpha(180),
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           'Thời gian ghi nhận',
-                          style: TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant.withAlpha(180)),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.onSurfaceVariant.withAlpha(180),
+                          ),
                         ),
                       ],
                     ),
                     Text(
                       '${DateFormat('dd/MM/yyyy').format(alert.createdAt)} · ${DateFormat('HH:mm').format(alert.createdAt)}',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.onSurfaceVariant),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),

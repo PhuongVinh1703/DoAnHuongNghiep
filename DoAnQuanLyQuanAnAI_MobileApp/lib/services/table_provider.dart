@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:doanquanlyquananai_mobileapp/models/table/dining_table.dart';
 import 'package:doanquanlyquananai_mobileapp/services/table_service.dart';
 import 'package:doanquanlyquananai_mobileapp/services/order_service.dart';
+import 'package:doanquanlyquananai_mobileapp/core/utils/error_handler.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class TableProvider extends ChangeNotifier {
-  
   List<DiningTable> _tables = [];
   bool _isLoading = false;
   String? _errorMessage;
@@ -15,17 +16,48 @@ class TableProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  Future<void> loadTables({int? branchId}) async {
+  int? _currentBranchId;
+  RealtimeChannel? _realtimeChannel;
+
+  void _subscribeRealtime() {
+    if (_realtimeChannel != null) return;
+    _realtimeChannel = Supabase.instance.client
+        .channel('diningtables-realtime-channel')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'DiningTables',
+          callback: (payload) {
+            loadTables(branchId: _currentBranchId, showLoading: false);
+          },
+        );
+    _realtimeChannel!.subscribe();
+  }
+
+  @override
+  void dispose() {
+    if (_realtimeChannel != null) {
+      Supabase.instance.client.removeChannel(_realtimeChannel!);
+    }
+    super.dispose();
+  }
+
+  Future<void> loadTables({int? branchId, bool showLoading = true}) async {
+    _currentBranchId = branchId;
+    _subscribeRealtime();
+
     if (_isLoading) return;
-    
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
+
+    if (showLoading) {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+    }
 
     try {
       final tableService = TableService();
       final tableResult = await tableService.getTables(branchId: branchId);
-      
+
       if (tableResult.isSuccess && tableResult.data != null) {
         List<DiningTable> fetchedTables = tableResult.data!;
 
@@ -33,7 +65,7 @@ class TableProvider extends ChangeNotifier {
         try {
           final orderService = OrderService();
           final ordersResult = await orderService.getOrders(status: 0);
-          
+
           if (ordersResult.isSuccess && ordersResult.data != null) {
             final List<int> occupiedTableIds = ordersResult.data!
                 .map((o) => o.tableId)
@@ -87,7 +119,7 @@ class TableProvider extends ChangeNotifier {
         _errorMessage = tableResult.error ?? 'Lỗi khi tải danh sách bàn';
       }
     } catch (e) {
-      _errorMessage = 'Đã có lỗi xảy ra: $e';
+      _errorMessage = ErrorHandler.formatError(e);
     } finally {
       _isLoading = false;
       notifyListeners();

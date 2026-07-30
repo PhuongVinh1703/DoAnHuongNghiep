@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:doanquanlyquananai_mobileapp/core/constants/app_colors.dart';
-import 'package:doanquanlyquananai_mobileapp/core/storage/secure_storage.dart';
 import 'package:doanquanlyquananai_mobileapp/models/reservation/reservation.dart';
 import 'package:doanquanlyquananai_mobileapp/services/reservation_service.dart';
 import 'package:doanquanlyquananai_mobileapp/core/constants/app_enums.dart';
 import 'package:doanquanlyquananai_mobileapp/core/utils/date_utils.dart';
 import 'package:doanquanlyquananai_mobileapp/widgets/common/app_snackbar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:doanquanlyquananai_mobileapp/services/auth_service.dart';
+import 'package:doanquanlyquananai_mobileapp/services/branch_service.dart';
+import 'package:doanquanlyquananai_mobileapp/models/branch/branch.dart';
+import 'package:doanquanlyquananai_mobileapp/config/constants.dart';
 
 class ReservationManageScreen extends StatefulWidget {
   const ReservationManageScreen({super.key});
@@ -24,17 +28,99 @@ class _ReservationManageScreenState extends State<ReservationManageScreen>
   List<Reservation> _confirmed = [];
   bool _isLoading = true;
 
+  List<Branch> _branches = [];
+  int? _selectedBranchId;
+  bool _isOwner = false;
+
+  RealtimeChannel? _realtimeChannel;
+
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
-    _loadData();
+    _initData();
+  }
+
+  Future<void> _initData() async {
+    _subscribeRealtime();
+    await _loadBranches();
+    await _loadData();
+  }
+
+  Future<void> _loadBranches() async {
+    final auth = context.read<AuthService>();
+    final user = auth.currentUser;
+    _isOwner = (user?.role == AppConstants.roleOwner);
+    if (_isOwner) {
+      final res = await BranchService().getBranches();
+      if (res.isSuccess) {
+        setState(() {
+          _branches = res.data ?? [];
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
     _tabs.dispose();
+    if (_realtimeChannel != null) {
+      Supabase.instance.client.removeChannel(_realtimeChannel!);
+    }
     super.dispose();
+  }
+
+  void _subscribeRealtime() {
+    if (_realtimeChannel != null) return;
+    _realtimeChannel = Supabase.instance.client
+        .channel('reservation-screen-channel')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'Reservations',
+          callback: (payload) {
+            if (mounted) _loadData();
+          },
+        );
+    _realtimeChannel!.subscribe();
+  }
+
+  Widget _buildBranchFilter() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Colors.white,
+      child: Row(
+        children: [
+          const Icon(Icons.store_rounded, color: AppColors.primary, size: 20),
+          const SizedBox(width: 8),
+          const Text('Chi nhánh:', style: TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: DropdownButton<int?>(
+              value: _selectedBranchId,
+              isExpanded: true,
+              underline: const SizedBox(),
+              items: [
+                const DropdownMenuItem<int?>(
+                  value: null,
+                  child: Text('Tất cả chi nhánh'),
+                ),
+                ..._branches.map((b) => DropdownMenuItem<int?>(
+                      value: b.branchId,
+                      child: Text(b.name),
+                    )),
+              ],
+              onChanged: (val) {
+                setState(() {
+                  _selectedBranchId = val;
+                });
+                _loadData();
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -50,37 +136,50 @@ class _ReservationManageScreenState extends State<ReservationManageScreen>
           ],
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabs,
-              children: [
-                _pending.isEmpty
-                    ? const Center(child: Text('Không có đặt bàn chờ duyệt'))
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _pending.length,
-                        itemBuilder: (context, idx) => _buildCard(_pending[idx], showActions: true),
-                      ),
-                _confirmed.isEmpty
-                    ? const Center(child: Text('Không có đặt bàn đã xác nhận'))
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _confirmed.length,
-                        itemBuilder: (context, idx) => _buildCard(_confirmed[idx], showActions: false),
-                      ),
-              ],
-            ),
+      body: Column(
+        children: [
+          if (_isOwner) _buildBranchFilter(),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : TabBarView(
+                    controller: _tabs,
+                    children: [
+                      _pending.isEmpty
+                          ? const Center(child: Text('Không có đặt bàn chờ duyệt'))
+                          : ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _pending.length,
+                              itemBuilder: (context, idx) => _buildCard(_pending[idx], showActions: true),
+                            ),
+                      _confirmed.isEmpty
+                          ? const Center(child: Text('Không có đặt bàn đã xác nhận'))
+                          : ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _confirmed.length,
+                              itemBuilder: (context, idx) => _buildCard(_confirmed[idx], showActions: false),
+                            ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    final branchIdStr = await SecureStorage.getBranchId();
-    final branchId = int.tryParse(branchIdStr ?? '1') ?? 1;
+    
+    int? filterBranchId;
+    if (_isOwner) {
+      filterBranchId = _selectedBranchId;
+    } else {
+      final user = context.read<AuthService>().currentUser;
+      filterBranchId = user?.branchId;
+    }
 
-    final r1 = await _svc.getReservations(status: ReservationStatus.pending, branchId: branchId);
-    final r2 = await _svc.getReservations(status: ReservationStatus.confirmed, branchId: branchId);
+    final r1 = await _svc.getReservations(status: ReservationStatus.pending, branchId: filterBranchId);
+    final r2 = await _svc.getReservations(status: ReservationStatus.confirmed, branchId: filterBranchId);
     setState(() {
       _isLoading = false;
       _pending   = r1.data ?? [];
@@ -96,22 +195,20 @@ class _ReservationManageScreenState extends State<ReservationManageScreen>
     );
   }
 
-  Future<List<dynamic>> _fetchStaff() async {
+  Future<List<dynamic>> _fetchStaff(int branchId) async {
     try {
-      final branchIdStr = await SecureStorage.getBranchId();
-      final branchId = int.tryParse(branchIdStr ?? '1') ?? 1;
-      
       final db = Supabase.instance.client;
       final res = await db
           .from('Accounts')
           .select()
-          .eq('Role', 1)
+          .eq('Role', AppConstants.roleStaff)
           .eq('BranchId', branchId)
           .eq('IsActive', true);
 
       return (res as List).map((acc) => {
         'accountId': acc['AccountId'] ?? acc['accountId'],
         'fullName': acc['FullName'] ?? acc['fullName'],
+        'username': acc['Username'] ?? acc['username'] ?? '',
         'role': acc['Role'] ?? acc['role'],
         'branchId': acc['BranchId'] ?? acc['branchId'],
       }).toList();
@@ -224,7 +321,7 @@ class _ReservationManageScreenState extends State<ReservationManageScreen>
                           ),
                           const SizedBox(height: 8),
                           FutureBuilder<List<dynamic>>(
-                            future: _fetchStaff(),
+                            future: _fetchStaff(r.branchId),
                             builder: (context, snapshot) {
                               if (snapshot.connectionState == ConnectionState.waiting) {
                                 return const SizedBox(
@@ -476,6 +573,7 @@ class _ReservationManageScreenState extends State<ReservationManageScreen>
           Text(AppDateUtils.timeAgo(r.createdAt), style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
         ]),
         const SizedBox(height: 6),
+        _row(Icons.store_rounded, 'Chi nhánh: ${r.branchName ?? '—'}'),
         _row(Icons.phone, r.customerPhone),
         _row(Icons.access_time, '${AppDateUtils.formatDateTime(r.reservedAt)} ($shiftText)'),
         _row(Icons.people, '${r.guestCount} khách'),

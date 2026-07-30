@@ -150,11 +150,15 @@ class DashboardService {
     String? from,
     String? to,
     int top = 10,
+    int? branchId,
   }) async {
     try {
-      var query = _db.from('InvoiceItems').select('ItemId, ItemName, Quantity, UnitPrice, Invoices!inner(PaidAt)');
+      var query = _db.from('InvoiceItems').select(
+        'ItemId, ItemName, Quantity, UnitPrice, Invoices!inner(PaidAt, DiningTables!inner(BranchId))',
+      );
       if (from != null) query = query.gte('Invoices.PaidAt', from);
       if (to != null) query = query.lte('Invoices.PaidAt', to);
+      if (branchId != null) query = query.eq('Invoices.DiningTables.BranchId', branchId);
       
       final items = await query;
       final Map<int, _TempTopItem> map = {};

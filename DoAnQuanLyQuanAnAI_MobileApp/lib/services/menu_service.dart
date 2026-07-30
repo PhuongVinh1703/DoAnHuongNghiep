@@ -8,11 +8,14 @@ class MenuService {
   final _db = Supabase.instance.client;
 
   // ── Categories ────────────────────────────────────────────────
-  Future<ApiResult<List<MenuCategoryModel>>> getActiveCategories() async {
-    // Thử cache trước
-    final cached = LocalCache.getMenuCategories();
-    if (cached != null) {
-      return ApiResult.success(cached.map(MenuCategoryModel.fromJson).toList());
+  Future<ApiResult<List<MenuCategoryModel>>> getActiveCategories(
+      {bool forceRefresh = false}) async {
+    // Thử cache trước (bỏ qua nếu forceRefresh)
+    if (!forceRefresh) {
+      final cached = LocalCache.getMenuCategories();
+      if (cached != null) {
+        return ApiResult.success(cached.map(MenuCategoryModel.fromJson).toList());
+      }
     }
     try {
       final res = await _db
@@ -42,15 +45,18 @@ class MenuService {
   }
 
   // ── Items ─────────────────────────────────────────────────────
-  Future<ApiResult<List<MenuItemModel>>> getAvailableItems({int? categoryId}) async {
-    // Thử cache
-    final cached = LocalCache.getMenuItems();
-    if (cached != null) {
-      var list = cached.map(MenuItemModel.fromJson).toList();
-      if (categoryId != null && categoryId != 0) {
-        list = list.where((i) => i.categoryId == categoryId).toList();
+  Future<ApiResult<List<MenuItemModel>>> getAvailableItems(
+      {int? categoryId, bool forceRefresh = false}) async {
+    // Thử cache (bỏ qua nếu forceRefresh)
+    if (!forceRefresh) {
+      final cached = LocalCache.getMenuItems();
+      if (cached != null) {
+        var list = cached.map(MenuItemModel.fromJson).toList();
+        if (categoryId != null && categoryId != 0) {
+          list = list.where((i) => i.categoryId == categoryId).toList();
+        }
+        return ApiResult.success(list);
       }
-      return ApiResult.success(list);
     }
     try {
       var query = _db

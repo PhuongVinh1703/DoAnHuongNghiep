@@ -99,17 +99,17 @@ for _ in range(800):
 
 # ─────────────────────────────────────────────────────────────
 # ANOMALY 3: SpeedAnomaly (800 mẫu)
-# Đặc trưng BẢN CHẤT: session_duration < 30 giây VÀ checkout_time_sec < 30 giây
+# Đặc trưng BẢN CHẤT: session_duration < 120 giây VÀ checkout_time_sec < 120 giây
 # Toàn bộ session quá nhanh (mở bàn → chọn món → thanh toán chỉ vài giây)
 # ─────────────────────────────────────────────────────────────
 print("Sinh SpeedAnomaly (800 mẫu)...")
 for _ in range(800):
-    speed = round(random.uniform(5, 29), 1)
+    speed = round(random.uniform(5, 119.0), 1)
     # checkout cũng rất nhanh (phần lớn thời gian session)
     checkout = round(random.uniform(speed * 0.5, speed * 0.95), 1)
     is_perfect = random.random() < 0.85
     records.append({
-        "session_duration":            speed,   # KEY FEATURE: < 30s
+        "session_duration":            speed,   # KEY FEATURE: < 120s
         "num_items_ordered":           random.randint(4, 12),
         "cancel_rate":                 0.0 if is_perfect else round(random.uniform(0, 0.08), 4),
         "transaction_hour":            random.randint(8, 22),

@@ -5,6 +5,8 @@ import 'package:doanquanlyquananai_mobileapp/theme/app_theme.dart';
 import 'package:doanquanlyquananai_mobileapp/l10n/app_localizations.dart';
 import 'package:doanquanlyquananai_mobileapp/services/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:doanquanlyquananai_mobileapp/services/branch_service.dart';
+import 'package:doanquanlyquananai_mobileapp/models/branch/branch.dart';
 
 class StaffManagementScreen extends StatefulWidget {
   const StaffManagementScreen({super.key});
@@ -21,10 +23,19 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
   int? _roleFilter; // null = all, 2 = manager, 1 = staff
   final _searchCtrl = TextEditingController();
 
+  List<Branch> _branches = [];
+  int? _selectedBranchId;
+  bool _isOwner = false;
+
   @override
   void initState() {
     super.initState();
-    _loadStaff();
+    _initData();
+  }
+
+  Future<void> _initData() async {
+    await _loadBranches();
+    await _loadStaff();
   }
 
   @override
@@ -33,11 +44,24 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
     super.dispose();
   }
 
+  Future<void> _loadBranches() async {
+    final auth = context.read<AuthService>();
+    final user = auth.currentUser;
+    if (user?.role == 0) {
+      final res = await BranchService().getBranches();
+      if (res.isSuccess) {
+        setState(() {
+          _branches = res.data ?? [];
+        });
+      }
+    }
+  }
+
   Future<void> _loadStaff() async {
     setState(() { _isLoading = true; _error = null; });
     try {
       final db = Supabase.instance.client;
-      var query = db.from('Accounts').select();
+      var query = db.from('Accounts').select('*, Branches(Name)');
       if (_roleFilter != null) {
         query = query.eq('Role', _roleFilter!);
       } else {
@@ -47,10 +71,15 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
       
       final auth = context.read<AuthService>();
       final user = auth.currentUser;
-      if (user != null && user.role != 0) {
-        // Manager chỉ quản lý nhân viên cùng chi nhánh
-        if (user.branchId != null) {
-          query = query.eq('BranchId', user.branchId!);
+      _isOwner = (user?.role == 0);
+
+      if (_isOwner) {
+        if (_selectedBranchId != null) {
+          query = query.eq('BranchId', _selectedBranchId!);
+        }
+      } else {
+        if (user?.branchId != null) {
+          query = query.eq('BranchId', user!.branchId!);
         }
       }
       final res = await query.order('AccountId');
@@ -64,6 +93,7 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
         'phone': acc['Phone'] ?? acc['phone'] ?? '',
         'email': acc['Email'] ?? acc['email'] ?? '',
         'branchId': acc['BranchId'] ?? acc['branchId'],
+        'branchName': (acc['Branches'] as Map?)?['Name'] ?? '—',
       }).toList();
 
       setState(() {
@@ -180,14 +210,186 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
   }
 
   void _showAddStaffDialog() {
-    final authService = context.read<AuthService>();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _AddStaffSheet(
-        branchId: authService.currentUser?.branchId,
+        branchId: _isOwner ? null : context.read<AuthService>().currentUser?.branchId,
+        isAdmin: _isOwner,
+        branches: _branches,
         onSuccess: _loadStaff,
+      ),
+    );
+  }
+
+  void _showStaffDetailsSheet(BuildContext context, dynamic staff) {
+    final role = staff['role'] as int? ?? 1;
+    final isActive = staff['isActive'] as bool? ?? true;
+    final fullName = staff['fullName'] as String? ?? '';
+    final username = staff['username'] as String? ?? '';
+    final phone = staff['phone'] as String? ?? 'Chưa cập nhật';
+    final email = staff['email'] as String? ?? 'Chưa cập nhật';
+    final branchName = staff['branchName'] as String? ?? 'Chưa gán';
+    final accountId = staff['accountId'];
+
+    final roleLabel = role == 0 ? '👑 Admin / Chủ nhà hàng' : role == 2 ? '🏢 Quản lý chi nhánh' : '👤 Nhân viên phục vụ';
+    final roleColor = role == 0 ? const Color(0xFF7C3AED) : role == 2 ? AppColors.primary : AppColors.onSurfaceVariant;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: [
+                        roleColor.withAlpha(60),
+                        roleColor.withAlpha(30),
+                      ]),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
+                      style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: roleColor),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          fullName,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '@$username',
+                          style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Divider(),
+              const SizedBox(height: 16),
+              _detailRow(Icons.badge_outlined, 'Vai trò', roleLabel, roleColor),
+              _detailRow(
+                isActive ? Icons.check_circle_outline_rounded : Icons.block_flipped,
+                'Trạng thái tài khoản',
+                isActive ? 'Đang hoạt động' : 'Bị khóa / Tạm ngưng',
+                isActive ? Colors.green : Colors.red,
+              ),
+              _detailRow(Icons.store_outlined, 'Chi nhánh làm việc', branchName, Colors.black87),
+              _detailRow(Icons.phone_outlined, 'Số điện thoại', phone, Colors.black87),
+              _detailRow(Icons.email_outlined, 'Email liên hệ', email, Colors.black87),
+              _detailRow(Icons.fingerprint_rounded, 'Mã tài khoản (ID)', 'ACC-$accountId', Colors.black54),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Đóng', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(IconData icon, String title, String val, Color valColor) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: Colors.grey[600]),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                const SizedBox(height: 2),
+                Text(val, style: TextStyle(color: valColor, fontSize: 14, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBranchFilter() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.only(bottom: 8),
+      color: Colors.white,
+      child: Row(
+        children: [
+          const Icon(Icons.store_rounded, color: AppColors.primary, size: 20),
+          const SizedBox(width: 8),
+          const Text('Chi nhánh:', style: TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: DropdownButton<int?>(
+              value: _selectedBranchId,
+              isExpanded: true,
+              underline: const SizedBox(),
+              items: [
+                const DropdownMenuItem<int?>(
+                  value: null,
+                  child: Text('Tất cả chi nhánh'),
+                ),
+                ..._branches.map((b) => DropdownMenuItem<int?>(
+                      value: b.branchId,
+                      child: Text(b.name),
+                    )),
+              ],
+              onChanged: (val) {
+                setState(() {
+                  _selectedBranchId = val;
+                });
+                _loadStaff();
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -196,8 +398,6 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final filtered = _filtered;
-    final authService = context.read<AuthService>();
-    final isAdmin = authService.currentUser?.role == 0;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -222,6 +422,7 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
       ),
       body: Column(
         children: [
+          if (_isOwner) _buildBranchFilter(),
           // Search + filter bar
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -248,10 +449,10 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
                     _FilterChip(label: 'Tất cả', selected: _roleFilter == null,
                       onTap: () => setState(() { _roleFilter = null; _loadStaff(); })),
                     const SizedBox(width: 8),
-                    if (isAdmin)
+                    if (_isOwner)
                     _FilterChip(label: '🏢 Quản lý', selected: _roleFilter == 2,
                       onTap: () => setState(() { _roleFilter = 2; _loadStaff(); })),
-                    if (isAdmin) const SizedBox(width: 8),
+                    if (_isOwner) const SizedBox(width: 8),
                     _FilterChip(label: '👤 Nhân viên', selected: _roleFilter == 1,
                       onTap: () => setState(() { _roleFilter = 1; _loadStaff(); })),
                     const Spacer(),
@@ -277,10 +478,13 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                         itemCount: filtered.length,
                         separatorBuilder: (context, index) => const SizedBox(height: 10),
-                        itemBuilder: (_, i) => _StaffCard(
-                          staff: filtered[i],
-                          onToggle: () => _toggleActive(filtered[i]),
-                          onResetPw: () => _resetPassword(filtered[i]),
+                        itemBuilder: (_, i) => GestureDetector(
+                          onTap: () => _showStaffDetailsSheet(context, filtered[i]),
+                          child: _StaffCard(
+                            staff: filtered[i],
+                            onToggle: () => _toggleActive(filtered[i]),
+                            onResetPw: () => _resetPassword(filtered[i]),
+                          ),
                         ),
                       ),
                     ),
@@ -465,8 +669,15 @@ class _EmptyState extends StatelessWidget {
 
 class _AddStaffSheet extends StatefulWidget {
   final int? branchId;
+  final bool isAdmin;
+  final List<Branch> branches;
   final VoidCallback onSuccess;
-  const _AddStaffSheet({this.branchId, required this.onSuccess});
+  const _AddStaffSheet({
+    this.branchId,
+    required this.isAdmin,
+    required this.branches,
+    required this.onSuccess,
+  });
 
   @override
   State<_AddStaffSheet> createState() => _AddStaffSheetState();
@@ -479,7 +690,17 @@ class _AddStaffSheetState extends State<_AddStaffSheet> {
   final _pwCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   int _role = 1; // default: Staff
+  int? _selectedBranchId;
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedBranchId = widget.branchId;
+    if (widget.isAdmin && widget.branches.isNotEmpty) {
+      _selectedBranchId = widget.branches.first.branchId;
+    }
+  }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -492,7 +713,7 @@ class _AddStaffSheetState extends State<_AddStaffSheet> {
         'p_fullname': _nameCtrl.text.trim(),
         'p_phone': _phoneCtrl.text.trim(),
         'p_role': _role,
-        'p_branch_id': widget.branchId,
+        'p_branch_id': _selectedBranchId,
       });
       if (mounted) {
         Navigator.pop(context);
@@ -562,6 +783,30 @@ class _AddStaffSheetState extends State<_AddStaffSheet> {
                 keyboardType: TextInputType.phone,
               ),
               const SizedBox(height: 16),
+
+              if (widget.isAdmin) ...[
+                Text('Chi nhánh *', style: TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant)),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<int>(
+                  value: _selectedBranchId,
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.store_outlined),
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  items: widget.branches.map((b) => DropdownMenuItem<int>(
+                    value: b.branchId,
+                    child: Text(b.name),
+                  )).toList(),
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedBranchId = val;
+                    });
+                  },
+                  validator: (val) => val == null ? 'Vui lòng chọn chi nhánh' : null,
+                ),
+                const SizedBox(height: 12),
+              ],
 
               Text('Vai trò', style: TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant)),
               const SizedBox(height: 8),

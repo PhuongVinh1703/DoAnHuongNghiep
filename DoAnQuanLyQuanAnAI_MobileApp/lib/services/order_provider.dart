@@ -3,6 +3,7 @@ import 'package:doanquanlyquananai_mobileapp/models/order/order.dart';
 import 'package:doanquanlyquananai_mobileapp/core/utils/ai_tracker.dart';
 import 'package:doanquanlyquananai_mobileapp/services/order_service.dart';
 import 'package:doanquanlyquananai_mobileapp/services/invoice_service.dart';
+import 'package:doanquanlyquananai_mobileapp/core/utils/error_handler.dart';
 
 class OrderProvider with ChangeNotifier {
 
@@ -54,7 +55,7 @@ class OrderProvider with ChangeNotifier {
         _error = result.error ?? 'Lỗi tải order';
       }
     } catch (e) {
-      _error = e.toString();
+      _error = ErrorHandler.formatError(e);
     }
 
     _isLoading = false;
@@ -79,7 +80,7 @@ class OrderProvider with ChangeNotifier {
         return false;
       }
     } catch (e) {
-      _error = e.toString();
+      _error = ErrorHandler.formatError(e);
       notifyListeners();
       return false;
     }
@@ -103,7 +104,7 @@ class OrderProvider with ChangeNotifier {
         return false;
       }
     } catch (e) {
-      _error = e.toString();
+      _error = ErrorHandler.formatError(e);
       notifyListeners();
       return false;
     }
@@ -140,7 +141,7 @@ class OrderProvider with ChangeNotifier {
         return false;
       }
     } catch (e) {
-      _error = e.toString();
+      _error = ErrorHandler.formatError(e);
       notifyListeners();
       return false;
     }
@@ -173,7 +174,7 @@ class OrderProvider with ChangeNotifier {
         return false;
       }
     } catch (e) {
-      _error = e.toString();
+      _error = ErrorHandler.formatError(e);
       notifyListeners();
       return false;
     }
@@ -199,7 +200,7 @@ class OrderProvider with ChangeNotifier {
         return false;
       }
     } catch (e) {
-      _error = e.toString();
+      _error = ErrorHandler.formatError(e);
       notifyListeners();
       return false;
     }
@@ -259,7 +260,7 @@ class OrderProvider with ChangeNotifier {
         return null;
       }
     } catch (e) {
-      _error = e.toString();
+      _error = ErrorHandler.formatError(e);
       notifyListeners();
       return null;
     }

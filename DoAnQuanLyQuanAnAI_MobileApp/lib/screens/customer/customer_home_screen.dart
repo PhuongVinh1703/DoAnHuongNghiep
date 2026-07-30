@@ -245,7 +245,12 @@ class _HomeContent extends StatelessWidget {
               Text('Thưởng thức những món hải sản tươi ngon nhất được chế biến bởi đầu bếp 5 sao.', style: TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant, height: 1.5)),
               const SizedBox(height: 14),
               ElevatedButton(
-                onPressed: () {},
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const MenuScreen(initialCategoryId: 3),
+                  ),
+                ),
                 style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
                 child: const Text('Xem Thực Đơn'),
               ),

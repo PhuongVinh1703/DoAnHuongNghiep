@@ -4,12 +4,14 @@ import 'package:doanquanlyquananai_mobileapp/theme/app_theme.dart';
 import 'package:doanquanlyquananai_mobileapp/services/customer_service.dart';
 import 'package:doanquanlyquananai_mobileapp/models/customer/customer.dart';
 import 'package:doanquanlyquananai_mobileapp/widgets/common/app_snackbar.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CustomerManagementScreen extends StatefulWidget {
   const CustomerManagementScreen({super.key});
 
   @override
-  State<CustomerManagementScreen> createState() => _CustomerManagementScreenState();
+  State<CustomerManagementScreen> createState() =>
+      _CustomerManagementScreenState();
 }
 
 class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
@@ -19,14 +21,44 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
 
+  RealtimeChannel? _realtimeChannel;
+
   @override
   void initState() {
     super.initState();
     _loadCustomers();
+    _setupRealtime();
   }
 
-  Future<void> _loadCustomers() async {
-    setState(() => _isLoading = true);
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    if (_realtimeChannel != null) {
+      Supabase.instance.client.removeChannel(_realtimeChannel!);
+    }
+    super.dispose();
+  }
+
+  void _setupRealtime() {
+    _realtimeChannel = Supabase.instance.client
+        .channel('customers-realtime-channel')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'Customers',
+          callback: (payload) {
+            if (mounted) {
+              _loadCustomers(showLoading: false);
+            }
+          },
+        );
+    _realtimeChannel!.subscribe();
+  }
+
+  Future<void> _loadCustomers({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() => _isLoading = true);
+    }
     final res = await _customerService.searchCustomers(search: _searchQuery);
     if (res.isSuccess) {
       setState(() {
@@ -45,10 +77,18 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Xác nhận'),
-        content: Text('Bạn có chắc muốn $action tài khoản khách hàng ${customer.fullName}?'),
+        content: Text(
+          'Bạn có chắc muốn $action tài khoản khách hàng ${customer.fullName}?',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Đồng ý')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Đồng ý'),
+          ),
         ],
       ),
     );
@@ -69,7 +109,10 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
     return Scaffold(
       backgroundColor: AppColors.surface,
       appBar: AppBar(
-        title: const Text('Quản lý Khách hàng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+        title: const Text(
+          'Quản lý Khách hàng',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
@@ -115,21 +158,23 @@ class _CustomerManagementScreenState extends State<CustomerManagementScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _customers.isEmpty
-                    ? const Center(child: Text('Không tìm thấy khách hàng nào'))
-                    : RefreshIndicator(
-                        onRefresh: _loadCustomers,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: AppTheme.marginMobile),
-                          itemCount: _customers.length,
-                          itemBuilder: (context, index) {
-                            final customer = _customers[index];
-                            return _CustomerCard(
-                              customer: customer,
-                              onToggleStatus: () => _toggleStatus(customer),
-                            );
-                          },
-                        ),
+                ? const Center(child: Text('Không tìm thấy khách hàng nào'))
+                : RefreshIndicator(
+                    onRefresh: _loadCustomers,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.marginMobile,
                       ),
+                      itemCount: _customers.length,
+                      itemBuilder: (context, index) {
+                        final customer = _customers[index];
+                        return _CustomerCard(
+                          customer: customer,
+                          onToggleStatus: () => _toggleStatus(customer),
+                        );
+                      },
+                    ),
+                  ),
           ),
         ],
       ),
@@ -141,10 +186,7 @@ class _CustomerCard extends StatelessWidget {
   final Customer customer;
   final VoidCallback onToggleStatus;
 
-  const _CustomerCard({
-    required this.customer,
-    required this.onToggleStatus,
-  });
+  const _CustomerCard({required this.customer, required this.onToggleStatus});
 
   @override
   Widget build(BuildContext context) {
@@ -167,7 +209,9 @@ class _CustomerCard extends StatelessWidget {
             ),
             alignment: Alignment.center,
             child: Text(
-              customer.fullName.isNotEmpty ? customer.fullName[0].toUpperCase() : 'C',
+              customer.fullName.isNotEmpty
+                  ? customer.fullName[0].toUpperCase()
+                  : 'C',
               style: TextStyle(
                 color: AppColors.primary,
                 fontWeight: FontWeight.bold,
@@ -182,26 +226,41 @@ class _CustomerCard extends StatelessWidget {
               children: [
                 Text(
                   customer.fullName,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   customer.phone.isEmpty ? 'Không có SĐT' : customer.phone,
-                  style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 13),
+                  style: TextStyle(
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
-                        color: Color(int.parse(customer.tierColor.replaceAll('#', '0xff'))).withAlpha(30),
+                        color: Color(
+                          int.parse(customer.tierColor.replaceAll('#', '0xff')),
+                        ).withAlpha(30),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
                         customer.tierDisplay,
                         style: TextStyle(
-                          color: Color(int.parse(customer.tierColor.replaceAll('#', '0xff'))),
+                          color: Color(
+                            int.parse(
+                              customer.tierColor.replaceAll('#', '0xff'),
+                            ),
+                          ),
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
@@ -210,7 +269,10 @@ class _CustomerCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     Text(
                       '${customer.points} điểm',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
@@ -222,13 +284,17 @@ class _CustomerCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: customer.isActive ? AppColors.successContainer : AppColors.errorContainer,
+                  color: customer.isActive
+                      ? AppColors.successContainer
+                      : AppColors.errorContainer,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   customer.isActive ? 'Hoạt động' : 'Đã khóa',
                   style: TextStyle(
-                    color: customer.isActive ? AppColors.success : AppColors.error,
+                    color: customer.isActive
+                        ? AppColors.success
+                        : AppColors.error,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -237,11 +303,17 @@ class _CustomerCard extends StatelessWidget {
               const SizedBox(height: 8),
               IconButton(
                 icon: Icon(
-                  customer.isActive ? Icons.lock_outline_rounded : Icons.lock_open_rounded,
-                  color: customer.isActive ? AppColors.error : AppColors.success,
+                  customer.isActive
+                      ? Icons.lock_outline_rounded
+                      : Icons.lock_open_rounded,
+                  color: customer.isActive
+                      ? AppColors.error
+                      : AppColors.success,
                 ),
                 onPressed: onToggleStatus,
-                tooltip: customer.isActive ? 'Khóa khách hàng' : 'Mở khóa khách hàng',
+                tooltip: customer.isActive
+                    ? 'Khóa khách hàng'
+                    : 'Mở khóa khách hàng',
               ),
             ],
           ),

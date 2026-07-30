@@ -1,3 +1,5 @@
+import '../utils/error_handler.dart';
+
 /// Generic wrapper cho kết quả API — tránh try/catch rải rác trong UI
 class ApiResult<T> {
   final T? data;
@@ -9,8 +11,8 @@ class ApiResult<T> {
   factory ApiResult.success(T data) =>
       ApiResult._(data: data, isSuccess: true);
 
-  factory ApiResult.failure(String error) =>
-      ApiResult._(error: error, isSuccess: false);
+  factory ApiResult.failure(dynamic error) =>
+      ApiResult._(error: ErrorHandler.formatError(error), isSuccess: false);
 
   bool get isFailure => !isSuccess;
 

@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:doanquanlyquananai_mobileapp/config/constants.dart';
 import 'package:doanquanlyquananai_mobileapp/models/auth/login_response.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:doanquanlyquananai_mobileapp/core/utils/error_handler.dart';
 
 class AuthService extends ChangeNotifier {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -81,7 +82,7 @@ class AuthService extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      _errorMessage = 'Lỗi kết nối: $e';
+      _errorMessage = ErrorHandler.formatError(e);
       _isLoading = false;
       notifyListeners();
       return false;
@@ -142,7 +143,7 @@ class AuthService extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      _errorMessage = 'Đổi mật khẩu thất bại: $e';
+      _errorMessage = ErrorHandler.formatError(e);
       _isLoading = false;
       notifyListeners();
       return false;
@@ -233,7 +234,7 @@ class AuthService extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      _errorMessage = 'Đăng ký thất bại: $e';
+      _errorMessage = ErrorHandler.formatError(e);
       _isLoading = false;
       notifyListeners();
       return false;
@@ -255,7 +256,7 @@ class AuthService extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      _errorMessage = 'Gửi mã OTP thất bại: $e';
+      _errorMessage = ErrorHandler.formatError(e);
       _isLoading = false;
       notifyListeners();
       return false;
@@ -292,7 +293,7 @@ class AuthService extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      _errorMessage = 'Đặt lại mật khẩu thất bại: $e';
+      _errorMessage = ErrorHandler.formatError(e);
       _isLoading = false;
       notifyListeners();
       return false;
