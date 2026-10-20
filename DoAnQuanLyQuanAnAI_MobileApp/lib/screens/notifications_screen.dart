@@ -4,7 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_theme.dart';
 import 'package:doanquanlyquananai_mobileapp/services/auth_service.dart';
+import 'package:doanquanlyquananai_mobileapp/services/alert_service.dart';
+import 'package:doanquanlyquananai_mobileapp/services/reservation_service.dart';
 import 'package:doanquanlyquananai_mobileapp/widgets/common/app_snackbar.dart';
+import 'package:doanquanlyquananai_mobileapp/core/constants/app_enums.dart';
 
 class NotificationItem {
   final String id;
@@ -71,10 +74,54 @@ class _NotificationsScreenState extends State<NotificationsScreen> with SingleTi
     _smsEnabled = prefs.getBool('pref_sms') ?? false;
     _soundEnabled = prefs.getBool('pref_sound') ?? true;
 
-    // Generate simulated role-specific notifications
-    _notifications = _getNotificationsForRole(role);
-    
-    setState(() => _isLoading = false);
+    final items = <NotificationItem>[];
+    try {
+      if (role == 0 || role == 2) {
+        final alertRes = await AlertService().getAlerts(resolved: false);
+        if (alertRes.isSuccess && alertRes.data != null) {
+          for (final a in alertRes.data!.take(5)) {
+            items.add(NotificationItem(
+              id: 'alert_${a.alertId}',
+              title: 'Cảnh báo AI: ${a.alertTypeName}',
+              content: a.description,
+              time: '${a.createdAt.hour.toString().padLeft(2, '0')}:${a.createdAt.minute.toString().padLeft(2, '0')} ${a.createdAt.day}/${a.createdAt.month}',
+              icon: Icons.psychology_rounded,
+              iconBg: const Color(0xFFFFDAD6),
+              iconColor: AppColors.error,
+              isRead: a.isResolved,
+            ));
+          }
+        }
+      } else {
+        final resList = await ReservationService().getReservations(branchId: auth.currentUser?.branchId);
+        if (resList.isSuccess && resList.data != null) {
+          for (final r in resList.data!.take(3)) {
+            items.add(NotificationItem(
+              id: 'res_${r.reservationId}',
+              title: 'Đặt bàn #${r.reservationId} — ${r.customerName}',
+              content: '${r.guestCount} khách lúc ${r.reservedAt.hour.toString().padLeft(2, '0')}:${r.reservedAt.minute.toString().padLeft(2, '0')} ${r.reservedAt.day}/${r.reservedAt.month}',
+              time: switch (r.status) {
+                ReservationStatus.pending => 'Chờ xác nhận',
+                ReservationStatus.confirmed => 'Đã xác nhận',
+                ReservationStatus.rejected => 'Đã từ chối',
+                ReservationStatus.cancelled => 'Đã hủy',
+                _ => 'Không xác định',
+              },
+              icon: Icons.event_available_rounded,
+              iconBg: const Color(0xFFE3F2FD),
+              iconColor: const Color(0xFF1976D2),
+            ));
+          }
+        }
+      }
+    } catch (_) {}
+
+    items.addAll(_getNotificationsForRole(role));
+    _notifications = items;
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _togglePreference(String key, bool value) async {

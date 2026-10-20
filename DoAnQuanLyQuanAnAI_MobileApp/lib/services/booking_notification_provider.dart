@@ -106,7 +106,7 @@ class BookingNotificationProvider extends ChangeNotifier {
           final note = r.managerNote;
           if (note == null || note.isEmpty) return false;
           // Phù hợp cấu trúc: [Giao việc: Tên Nhân Viên]
-          return note.contains('Giao việc: $staffName') || note.contains(staffName);
+          return note.contains('Giao việc: $staffName');
         }).toList();
       },
       onFailure: (_) {},

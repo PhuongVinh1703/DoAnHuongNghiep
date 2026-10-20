@@ -1,9 +1,9 @@
-// Role (trong JWT claims)
+// Role (đồng bộ với AppConstants và bảng Accounts trên Supabase)
 class Role {
-  static const int owner   = 0;
-  static const int manager = 1;
-  static const int staff   = 2;
-  // LƯU Ý: Customer là entity riêng, KHÔNG có tài khoản đăng nhập qua JWT
+  static const int owner    = 0;
+  static const int staff    = 1;
+  static const int manager  = 2;
+  static const int customer = 3;
 }
 
 // Table Status
@@ -35,12 +35,15 @@ class ReservationStatus {
   static const int cancelled = 3;
 }
 
-// Alert Type (theo code thực tế)
+// Alert Type (đồng bộ 0..6 với Alert model và InvoiceService)
 class AlertType {
-  static const int anomalyTransaction = 1;
-  static const int highDiscount       = 2;
-  static const int voidAbuse          = 3;
-  static const int suspiciousPattern  = 4;
+  static const int cancelAfterPayment   = 0;
+  static const int anomalyTransaction   = 1;
+  static const int excessiveDiscount    = 2;
+  static const int unusualHours         = 3;
+  static const int frequentCancellation = 4;
+  static const int speedAnomaly         = 5;
+  static const int addRemoveAnomaly     = 6;
 }
 
 // Alert Severity
@@ -52,9 +55,11 @@ class AlertSeverity {
 
 // Customer Tier
 class CustomerTier {
-  static const int bronze = 0;
-  static const int silver = 1;  // >= 100 điểm
-  static const int gold   = 2;  // >= 500 điểm
+  static const int bronze   = 0;
+  static const int silver   = 1; // >= 100 điểm
+  static const int gold     = 2; // >= 500 điểm
+  static const int platinum = 3; // >= 1000 điểm
+  static const int diamond  = 4; // >= 2000 điểm
 }
 
 // AI Anomaly Types (từ label_encoder Python)

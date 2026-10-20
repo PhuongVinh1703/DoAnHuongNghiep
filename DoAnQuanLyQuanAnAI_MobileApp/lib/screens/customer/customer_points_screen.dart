@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:doanquanlyquananai_mobileapp/config/constants.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_theme.dart';
@@ -23,7 +24,7 @@ class _CustomerPointsScreenState extends State<CustomerPointsScreen>
   bool _isRedeeming = false;
 
   // Tier thresholds
-  static const tierThresholds = [0, 50, 200, 500, 1000];
+  static const tierThresholds = [0, 100, 500, 1000, 2000];
   static const tierNames = ['Đồng', 'Bạc', 'Vàng', 'VIP', 'Kim Cương'];
   static const tierEmojis = ['🥉', '🥈', '🥇', '💎', '👑'];
   static const tierColors = [
@@ -58,6 +59,79 @@ class _CustomerPointsScreenState extends State<CustomerPointsScreen>
     _tabController.dispose();
     _tokenController.dispose();
     super.dispose();
+  }
+
+  Future<void> _openQrCameraScanner() async {
+    final scannedCode = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        bool detected = false;
+        return Container(
+          height: MediaQuery.of(ctx).size.height * 0.72,
+          decoration: const BoxDecoration(
+            color: Colors.black,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Quét mã QR tích điểm',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: MobileScanner(
+                    onDetect: (capture) {
+                      if (detected) return;
+                      for (final barcode in capture.barcodes) {
+                        final raw = barcode.rawValue;
+                        if (raw != null && raw.trim().isNotEmpty) {
+                          detected = true;
+                          Navigator.pop(ctx, raw.trim());
+                          break;
+                        }
+                      }
+                    },
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Đưa camera vào mã QR trên hóa đơn thanh toán để tự động nhận điểm',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (scannedCode != null && scannedCode.isNotEmpty && mounted) {
+      _tokenController.text = scannedCode.toUpperCase();
+      await _redeemQr();
+    }
   }
 
   Future<void> _redeemQr() async {
@@ -280,6 +354,22 @@ class _CustomerPointsScreenState extends State<CustomerPointsScreen>
             label: Text(_isRedeeming ? 'Đang xử lý...' : 'Tích điểm ngay',
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
             style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _isRedeeming ? null : _openQrCameraScanner,
+            icon: const Icon(Icons.camera_alt_rounded),
+            label: const Text(
+              'Quét mã QR bằng Camera',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              side: const BorderSide(color: AppColors.primary, width: 1.5),
+            ),
           ),
         ),
 

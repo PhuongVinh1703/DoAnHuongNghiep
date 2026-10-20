@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
@@ -458,21 +459,36 @@ class _SimulatedPaymentSheetState extends State<SimulatedPaymentSheet> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: const TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant)),
-        Row(
-          children: [
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-                color: color ?? AppColors.onSurface,
+        GestureDetector(
+          onTap: isCopyable
+              ? () async {
+                  await Clipboard.setData(ClipboardData(text: value));
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Đã sao chép: $value'),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                }
+              : null,
+          child: Row(
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+                  color: color ?? AppColors.onSurface,
+                ),
               ),
-            ),
-            if (isCopyable) ...[
-              const SizedBox(width: 4),
-              Icon(Icons.copy_rounded, size: 14, color: AppColors.primary.withAlpha(180)),
-            ]
-          ],
+              if (isCopyable) ...[
+                const SizedBox(width: 4),
+                Icon(Icons.copy_rounded, size: 14, color: AppColors.primary.withAlpha(180)),
+              ]
+            ],
+          ),
         ),
       ],
     );

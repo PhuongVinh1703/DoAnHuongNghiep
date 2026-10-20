@@ -5,6 +5,7 @@ import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_theme.dart';
 import 'package:doanquanlyquananai_mobileapp/services/auth_service.dart';
 import 'package:doanquanlyquananai_mobileapp/services/customer_provider.dart';
+import 'package:doanquanlyquananai_mobileapp/services/order_service.dart';
 
 class LogItem {
   final String title;
@@ -108,8 +109,32 @@ class _ActivityLogScreenState extends State<ActivityLogScreen> {
       }
       _logs = tempLogs;
     } else {
-      // Employee timeline
-      _logs = _getEmployeeLogs(user.role);
+      final realLogs = <LogItem>[];
+      try {
+        final ordRes = await OrderService().getOrders(pageSize: 10);
+        if (ordRes.isSuccess && ordRes.data != null) {
+          final fmt = DateFormat('dd/MM/yyyy HH:mm');
+          for (final o in ordRes.data!.take(6)) {
+            final statusText = o.status == 1
+                ? 'Đã thanh toán'
+                : (o.status == 2 ? 'Đã hủy' : 'Đang phục vụ');
+            realLogs.add(LogItem(
+              title: 'Đơn hàng #${o.orderId} (${o.tableName}) — $statusText',
+              description: 'Gồm ${o.items.length} món · Tạm tính: ${o.subtotal.toInt()}đ',
+              timestamp: fmt.format(o.openedAt),
+              icon: o.status == 1
+                  ? Icons.check_circle_outline_rounded
+                  : (o.status == 2 ? Icons.cancel_outlined : Icons.receipt_long_rounded),
+              color: o.status == 1
+                  ? Colors.green
+                  : (o.status == 2 ? Colors.red : AppColors.primary),
+              category: 'order',
+            ));
+          }
+        }
+      } catch (_) {}
+      realLogs.addAll(_getEmployeeLogs(user.role));
+      _logs = realLogs;
     }
     setState(() => _isLoading = false);
   }

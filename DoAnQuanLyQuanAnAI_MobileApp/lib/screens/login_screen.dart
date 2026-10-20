@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_theme.dart';
 import 'package:doanquanlyquananai_mobileapp/config/constants.dart';
+import 'package:doanquanlyquananai_mobileapp/l10n/app_localizations.dart';
 import 'package:doanquanlyquananai_mobileapp/services/auth_service.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/customer/customer_home_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/register_screen.dart';
@@ -108,6 +109,7 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   Widget build(BuildContext context) {
     final authService = context.watch<AuthService>();
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -164,7 +166,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                     // ─── Subtitle ────────────────────────────────
                     Text(
-                      'System Authentication',
+                      l10n.translate('system_auth'),
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             color: AppColors.onSurfaceVariant,
@@ -177,10 +179,10 @@ class _LoginScreenState extends State<LoginScreen>
                     TextFormField(
                       controller: _usernameController,
                       textInputAction: TextInputAction.next,
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Vui lòng nhập tên đăng nhập' : null,
-                      decoration: const InputDecoration(
-                        hintText: 'Tên đăng nhập',
-                        prefixIcon: Icon(Icons.person_outline_rounded),
+                      validator: (v) => (v == null || v.trim().isEmpty) ? l10n.translate('username_required') : null,
+                      decoration: InputDecoration(
+                        hintText: l10n.translate('username'),
+                        prefixIcon: const Icon(Icons.person_outline_rounded),
                       ),
                     ),
 
@@ -192,9 +194,9 @@ class _LoginScreenState extends State<LoginScreen>
                       obscureText: _obscurePassword,
                       textInputAction: TextInputAction.done,
                       onFieldSubmitted: (_) => _handleLogin(),
-                      validator: (v) => (v == null || v.isEmpty) ? 'Vui lòng nhập mật khẩu' : null,
+                      validator: (v) => (v == null || v.isEmpty) ? l10n.translate('password_required') : null,
                       decoration: InputDecoration(
-                        hintText: 'Mật khẩu',
+                        hintText: l10n.translate('password'),
                         prefixIcon: const Icon(Icons.lock_outline_rounded),
                         suffixIcon: IconButton(
                           icon: Icon(
@@ -221,7 +223,7 @@ class _LoginScreenState extends State<LoginScreen>
                           );
                         },
                         child: Text(
-                          'Forgot?',
+                          l10n.translate('forgot'),
                           style: TextStyle(
                             color: AppColors.primary,
                             fontWeight: FontWeight.w600,
@@ -247,7 +249,7 @@ class _LoginScreenState extends State<LoginScreen>
                                   strokeWidth: 2.5,
                                 ),
                               )
-                            : const Text('Sign In'),
+                            : Text(l10n.translate('sign_in')),
                       ),
                     ),
 
@@ -259,7 +261,7 @@ class _LoginScreenState extends State<LoginScreen>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            'New to ${AppConstants.appName}? ',
+                            l10n.translate('new_to_app'),
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                   color: AppColors.onSurfaceVariant,
                                 ),
@@ -271,7 +273,7 @@ class _LoginScreenState extends State<LoginScreen>
                               );
                             },
                             child: Text(
-                              'Register here',
+                              l10n.translate('register_here'),
                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                     color: AppColors.primary,
                                     fontWeight: FontWeight.w600,

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:doanquanlyquananai_mobileapp/core/network/api_response.dart';
 import 'package:doanquanlyquananai_mobileapp/core/utils/ai_tracker.dart';
@@ -69,6 +70,7 @@ class InvoiceService {
     int? customerId,
     String? voucherCode,
     String? discountCampaignCode,
+    double? appliedDiscountPercent,
     double vatPercent = 8.0,
   }) async {
     try {
@@ -78,7 +80,7 @@ class InvoiceService {
       try {
         final orderInfo = await _db
             .from('Orders')
-            .select('OpenedAt, OrderItems(Quantity)')
+            .select('OpenedAt, OrderItems(Quantity, IsDeleted)')
             .eq('OrderId', orderId)
             .eq('Status', 0)
             .maybeSingle();
@@ -88,10 +90,12 @@ class InvoiceService {
             orderInfo['OpenedAt'] ?? DateTime.now().toIso8601String(),
           );
           final items = orderInfo['OrderItems'] as List? ?? [];
-          numItemsOrdered = items.fold<int>(
-            0,
-            (sum, item) => sum + (item['Quantity'] as int? ?? 0),
-          );
+          numItemsOrdered = items
+              .where((item) => item['IsDeleted'] != true)
+              .fold<int>(
+                0,
+                (sum, item) => sum + (item['Quantity'] as int? ?? 0),
+              );
         }
       } catch (_) {}
 
@@ -116,23 +120,27 @@ class InvoiceService {
 
       // 3. Phân tích hành vi gian lận (AI Fraud Detection)
       try {
-        // Trích xuất phần trăm giảm giá thực tế từ mã (ví dụ: GIAM30 -> 30%)
-        double discountPercent = 0.0;
-        if (discountCampaignCode != null && discountCampaignCode.isNotEmpty) {
-          final regex = RegExp(r'\d+');
-          final match = regex.firstMatch(discountCampaignCode);
-          if (match != null) {
-            discountPercent = double.tryParse(match.group(0)!) ?? 10.0;
-          } else {
-            discountPercent = 10.0;
-          }
-        } else if (voucherCode != null && voucherCode.isNotEmpty) {
-          final regex = RegExp(r'\d+');
-          final match = regex.firstMatch(voucherCode);
-          if (match != null) {
-            discountPercent = double.tryParse(match.group(0)!) ?? 15.0;
-          } else {
-            discountPercent = 15.0;
+        // Lấy chính xác phần trăm giảm giá từ tham số truyền vào hoặc truy vấn từ DB
+        double discountPercent = appliedDiscountPercent ?? 0.0;
+        if (appliedDiscountPercent == null) {
+          if (discountCampaignCode != null && discountCampaignCode.isNotEmpty) {
+            final campRes = await _db
+                .from('DiscountCampaigns')
+                .select('DiscountPercent')
+                .eq('Code', discountCampaignCode.toUpperCase())
+                .maybeSingle();
+            if (campRes != null && campRes['DiscountPercent'] != null) {
+              discountPercent = (campRes['DiscountPercent'] as num).toDouble();
+            }
+          } else if (voucherCode != null && voucherCode.isNotEmpty) {
+            final vouRes = await _db
+                .from('CustomerVouchers')
+                .select('DiscountPercent')
+                .eq('Code', voucherCode)
+                .maybeSingle();
+            if (vouRes != null && vouRes['DiscountPercent'] != null) {
+              discountPercent = (vouRes['DiscountPercent'] as num).toDouble();
+            }
           }
         }
 
@@ -141,7 +149,7 @@ class InvoiceService {
             .inSeconds
             .toDouble();
 
-        // Tính toán cancel_rate: dùng giá trị từ tracker (nếu có, ví dụ khi test),
+        // Tính toán cancel_rate: dùng giá trị từ tracker (nếu có),
         // ngược lại truy vấn từ cơ sở dữ liệu dựa trên AccountId.
         double cancelRate = tracker.cancelRate;
         if (cancelRate == 0.0) {
@@ -151,7 +159,8 @@ class InvoiceService {
                 .select('Status')
                 .eq('AccountId', accountId);
             if (ordersList.isNotEmpty) {
-              final cancelledCount = ordersList.where((o) => o['Status'] == 2).length;
+              final cancelledCount =
+                  ordersList.where((o) => o['Status'] == 2).length;
               cancelRate = cancelledCount / ordersList.length;
             }
           } catch (_) {}
@@ -183,7 +192,8 @@ class InvoiceService {
           anomalyScore = 0.95;
           riskLevel = 'HIGH';
           alertType = 5; // SpeedAnomaly
-          alertMessage = '[Thanh toán siêu tốc] Bất thường khi thanh toán (session: ${sessionDuration.toInt()}s)';
+          alertMessage =
+              '[Thanh toán siêu tốc] Bất thường khi thanh toán (session: ${sessionDuration.toInt()}s)';
         }
         // 2. Giảm giá vượt ngưỡng (giảm giá >= 25%)
         else if (discountPercent >= 25.0) {
@@ -191,7 +201,8 @@ class InvoiceService {
           anomalyScore = 0.95;
           riskLevel = 'HIGH';
           alertType = 2; // ExcessiveDiscount
-          alertMessage = '[Lạm dụng giảm giá] Giảm giá quá lớn ($discountPercent%)';
+          alertMessage =
+              '[Lạm dụng giảm giá] Giảm giá quá lớn ($discountPercent%)';
         }
         // 3. Giao dịch ngoài giờ (từ 23h đến trước 8h sáng)
         else if (DateTime.now().hour < 8 || DateTime.now().hour >= 23) {
@@ -199,7 +210,8 @@ class InvoiceService {
           anomalyScore = 0.90;
           riskLevel = 'HIGH';
           alertType = 3; // UnusualHours
-          alertMessage = '[Giao dịch ngoài giờ] Thực hiện lúc ${DateTime.now().hour}h';
+          alertMessage =
+              '[Giao dịch ngoài giờ] Thực hiện lúc ${DateTime.now().hour}h';
         }
         // 4. Hủy bill liên tục (Void count >= 5 và tỷ lệ hủy đơn >= 50%)
         else if (tracker.voidCount >= 5 && cancelRate >= 0.50) {
@@ -207,7 +219,8 @@ class InvoiceService {
           anomalyScore = 0.90;
           riskLevel = 'HIGH';
           alertType = 4; // FrequentCancellation
-          alertMessage = '[Hủy bill liên tục] Tần suất hủy món cao (${tracker.voidCount} lần) và tỷ lệ hủy đơn của NV là ${(cancelRate * 100).toInt()}%';
+          alertMessage =
+              '[Hủy bill liên tục] Tần suất hủy món cao (${tracker.voidCount} lần) và tỷ lệ hủy đơn của NV là ${(cancelRate * 100).toInt()}%';
         }
         // 5. Thêm/xóa món bất thường (Tỷ lệ add_remove_ratio >= 70%)
         else if (tracker.addRemoveRatio >= 0.70) {
@@ -215,7 +228,8 @@ class InvoiceService {
           anomalyScore = 0.85;
           riskLevel = 'MEDIUM';
           alertType = 6; // AddRemoveAnomaly
-          alertMessage = '[Thêm/xóa món bất thường] Tỷ lệ chỉnh sửa giỏ hàng cao (${(tracker.addRemoveRatio * 100).toInt()}%)';
+          alertMessage =
+              '[Thêm/xóa món bất thường] Tỷ lệ chỉnh sửa giỏ hàng cao (${(tracker.addRemoveRatio * 100).toInt()}%)';
         }
 
         // Nếu luật thép chưa kích hoạt, gọi AI Microservice để phân tích sâu hơn
@@ -223,7 +237,8 @@ class InvoiceService {
           final aiRes = await _dio.post('$_aiBaseUrl/predict', data: payload);
           if (aiRes.statusCode == 200 && aiRes.data != null) {
             isAnomaly = aiRes.data['is_anomaly'] == true;
-            anomalyScore = (aiRes.data['anomaly_score'] as num? ?? 0.0).toDouble();
+            anomalyScore =
+                (aiRes.data['anomaly_score'] as num? ?? 0.0).toDouble();
             riskLevel = (aiRes.data['risk_level'] ?? 'Low').toString();
 
             if (isAnomaly) {
@@ -233,35 +248,49 @@ class InvoiceService {
                 final typeStr = firstAnomaly?['type']?.toString();
                 if (typeStr == 'CancelAfterPayment') {
                   alertType = 0;
-                  alertMessage = '[Hủy sau khi khách trả tiền] Bất thường khi thanh toán';
+                  alertMessage =
+                      '[Hủy sau khi khách trả tiền] Bất thường khi thanh toán';
                 } else if (typeStr == 'ExcessiveDiscount') {
                   alertType = 2;
-                  alertMessage = '[Lạm dụng giảm giá] Bất thường khi thanh toán';
+                  alertMessage =
+                      '[Lạm dụng giảm giá] Bất thường khi thanh toán';
                 } else if (typeStr == 'UnusualHours') {
                   alertType = 3;
-                  alertMessage = '[Giao dịch ngoài giờ] Bất thường khi thanh toán';
+                  alertMessage =
+                      '[Giao dịch ngoài giờ] Bất thường khi thanh toán';
                 } else if (typeStr == 'FrequentCancellation') {
                   alertType = 4;
-                  alertMessage = '[Hành vi đáng ngờ] Bất thường khi thanh toán';
+                  alertMessage =
+                      '[Hành vi đáng ngờ] Bất thường khi thanh toán';
                 } else if (typeStr == 'SpeedAnomaly') {
                   alertType = 5;
-                  alertMessage = '[Thanh toán siêu tốc] Bất thường khi thanh toán';
+                  alertMessage =
+                      '[Thanh toán siêu tốc] Bất thường khi thanh toán';
                 } else if (typeStr == 'AddRemoveAnomaly') {
                   alertType = 6;
-                  alertMessage = '[Thêm/xóa món bất thường] Bất thường khi thanh toán';
+                  alertMessage =
+                      '[Thêm/xóa món bất thường] Bất thường khi thanh toán';
                 } else {
                   alertType = 1;
-                  alertMessage = 'AI phát hiện giao dịch bất thường (score: ${anomalyScore.toStringAsFixed(4)})';
+                  alertMessage =
+                      'AI phát hiện giao dịch bất thường (score: ${anomalyScore.toStringAsFixed(4)})';
                 }
               } else {
                 alertType = 1;
-                alertMessage = 'AI phát hiện giao dịch bất thường (score: ${anomalyScore.toStringAsFixed(4)})';
+                alertMessage =
+                    'AI phát hiện giao dịch bất thường (score: ${anomalyScore.toStringAsFixed(4)})';
               }
             }
           }
         }
 
         if (isAnomaly) {
+          final detailJson = jsonEncode({
+            'invoiceNo': checkoutResponse.invoiceNo,
+            'riskLevel': riskLevel,
+            'features': payload,
+          });
+
           // Lưu cảnh báo gian lận vào bảng Alerts trực tiếp trên Supabase
           await _db.from('Alerts').insert({
             'AccountId': accountId,
@@ -269,7 +298,7 @@ class InvoiceService {
             'AlertType': alertType,
             'Severity': anomalyScore > 0.8 ? 2 : 1, // 2=High, 1=Medium
             'Message': alertMessage,
-            'Detail': 'InvoiceNo: ${checkoutResponse.invoiceNo}, RiskLevel: $riskLevel',
+            'Detail': detailJson,
             'AnomalyScore': anomalyScore,
             'IsResolved': false,
             'CreatedAt': DateTime.now().toIso8601String(),

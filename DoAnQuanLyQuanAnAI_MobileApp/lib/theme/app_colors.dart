@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
-/// Bảng màu đầy đủ từ Stitch Design System
+/// Bảng màu thống nhất toàn hệ thống (Stitch Design System + Semantic Helpers)
 /// "AI-Powered Smart Restaurant POS"
 class AppColors {
   // ── Primary (Terracotta) ────────────────────────────────
   static const Color primary = Color(0xFF9E3D00);
+  static const Color primaryDark = Color(0xFF7A2E00);
+  static const Color primaryLight = Color(0xFFFF8C5A);
   static const Color onPrimary = Color(0xFFFFFFFF);
   static const Color primaryContainer = Color(0xFFC64F00);
   static const Color onPrimaryContainer = Color(0xFFFFFBFF);
@@ -28,14 +30,17 @@ class AppColors {
   static const Color tertiaryFixed = Color(0xFFD1E4FB);
   static const Color tertiaryFixedDim = Color(0xFFB5C8DF);
 
-  // ── Error ──────────────────────────────────────────────
+  // ── Error / Info ───────────────────────────────────────
   static const Color error = Color(0xFFBA1A1A);
   static const Color onError = Color(0xFFFFFFFF);
   static const Color errorContainer = Color(0xFFFFDAD6);
   static const Color onErrorContainer = Color(0xFF93000A);
+  static const Color info = Color(0xFF2196F3);
 
   // ── Surface & Background ───────────────────────────────
+  static const Color background = Color(0xFFFFF8F6);
   static const Color surface = Color(0xFFFFF8F6);
+  static const Color surfaceDark = Color(0xFF1E1E2C);
   static const Color onSurface = Color(0xFF251913);
   static const Color surfaceDim = Color(0xFFEDD5CC);
   static const Color surfaceBright = Color(0xFFFFF8F6);
@@ -49,6 +54,14 @@ class AppColors {
   static const Color inverseOnSurface = Color(0xFFFFEDE7);
   static const Color surfaceTint = Color(0xFFA23F00);
 
+  // ── Text & Dividers (Legacy compatibility aliases) ─────
+  static const Color textPrimary = Color(0xFF251913);
+  static const Color textSecondary = Color(0xFF594238);
+  static const Color textHint = Color(0xFF8C7166);
+  static const Color textOnPrimary = Colors.white;
+  static const Color divider = Color(0xFFE0C0B2);
+  static const Color border = Color(0xFF8C7166);
+
   // ── Outline ────────────────────────────────────────────
   static const Color outline = Color(0xFF8C7166);
   static const Color outlineVariant = Color(0xFFE0C0B2);
@@ -58,6 +71,33 @@ class AppColors {
   static const Color successContainer = Color(0xFFC8E6C9);
   static const Color warning = Color(0xFFF9A825);
   static const Color warningContainer = Color(0xFFFFF8E1);
+
+  // ── Role Colors ────────────────────────────────────────
+  static const Color staffColor = Color(0xFF2196F3);
+  static const Color managerColor = Color(0xFF9C27B0);
+  static const Color ownerColor = Color(0xFFFF9800);
+  static const Color customerColor = Color(0xFF4CAF50);
+
+  // ── Order & Alert Status ───────────────────────────────
+  static const Color orderOpen = Color(0xFF2196F3);
+  static const Color orderPaid = Color(0xFF2E7D32);
+  static const Color orderCancelled = Color(0xFF9E9E9E);
+  static const Color alertLow = Color(0xFF2E7D32);
+  static const Color alertMedium = Color(0xFFF9A825);
+  static const Color alertHigh = Color(0xFFBA1A1A);
+  static const Color aiAnomaly = Color(0xFFBA1A1A);
+  static const Color aiNormal = Color(0xFF2E7D32);
+
+  // ── Customer Tier Colors ───────────────────────────────
+  static const Color tierBronze = Color(0xFFCD7F32);
+  static const Color tierSilver = Color(0xFF9E9E9E);
+  static const Color tierGold = Color(0xFFFFD700);
+  static const Color tierPlatinum = Color(0xFF00BCD4);
+  static const Color tierDiamond = Color(0xFF7C4DFF);
+
+  // ── Shimmer ────────────────────────────────────────────
+  static const Color shimmerBase = Color(0xFFE0E0E0);
+  static const Color shimmerHighlight = Color(0xFFF5F5F5);
 
   // ── Input fields ───────────────────────────────────────
   static const Color inputFill = Color(0xFFF1F3F5);
@@ -81,6 +121,50 @@ class AppColors {
   );
 
   // ── Glassmorphism for Bottom Nav ───────────────────────
-  static const Color glassBackground = Color(0xE6FFFFFF); // 90% opacity white
-  static const Color glassBorder = Color(0x33FFFFFF); // 20% opacity white
+  static const Color glassBackground = Color(0xE6FFFFFF);
+  static const Color glassBorder = Color(0x33FFFFFF);
+
+  // ── Helper Methods ─────────────────────────────────────
+  static Color tableStatusColor(int status) {
+    switch (status) {
+      case 0:
+        return chipPaid;
+      case 1:
+        return error;
+      case 2:
+        return warning;
+      default:
+        return textSecondary;
+    }
+  }
+
+  static Color alertSeverityColor(int severity) {
+    switch (severity) {
+      case 0:
+        return alertLow;
+      case 1:
+        return alertMedium;
+      case 2:
+        return alertHigh;
+      default:
+        return textSecondary;
+    }
+  }
+
+  static Color tierColor(int tier) {
+    switch (tier) {
+      case 0:
+        return tierBronze;
+      case 1:
+        return tierSilver;
+      case 2:
+        return tierGold;
+      case 3:
+        return tierPlatinum;
+      case 4:
+        return tierDiamond;
+      default:
+        return tierBronze;
+    }
+  }
 }

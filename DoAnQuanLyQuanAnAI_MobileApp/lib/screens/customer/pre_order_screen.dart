@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_theme.dart';
+import 'package:doanquanlyquananai_mobileapp/widgets/common/menu_item_image.dart';
 import 'package:doanquanlyquananai_mobileapp/services/menu_provider.dart';
 import 'package:doanquanlyquananai_mobileapp/models/menu/menu_item.dart';
 import 'package:doanquanlyquananai_mobileapp/core/utils/money_formatter.dart';
@@ -323,10 +324,13 @@ class _PreOrderScreenState extends State<PreOrderScreen> {
                   ],
                 ),
               ),
+              // ignore: deprecated_member_use
               Radio<String>(
                 value: value,
+                // ignore: deprecated_member_use
                 groupValue: _paymentMethod,
                 activeColor: AppColors.primary,
+                // ignore: deprecated_member_use
                 onChanged: (v) => setSheetState(() => _paymentMethod = v!),
               ),
             ],
@@ -508,19 +512,15 @@ class _PreOrderScreenState extends State<PreOrderScreen> {
                               padding: const EdgeInsets.all(12),
                               child: Row(
                                 children: [
-                                  // Emoji / Picture
-                                  Container(
-                                    width: 64,
-                                    height: 64,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.surfaceContainerHigh,
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      item.emoji.isNotEmpty ? item.emoji : '🍲',
-                                      style: const TextStyle(fontSize: 32),
-                                    ),
+                                  // Hình ảnh món ăn thực tế
+                                  MenuItemImage(
+                                    imagePath: item.imagePath,
+                                    itemName: item.name,
+                                    emoji: item.emoji,
+                                    width: 68,
+                                    height: 68,
+                                    borderRadius: BorderRadius.circular(10),
+                                    emojiSize: 30,
                                   ),
                                   const SizedBox(width: 14),
 

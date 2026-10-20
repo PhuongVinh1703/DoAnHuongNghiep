@@ -37,8 +37,14 @@ class _QrMembershipScreenState extends State<QrMembershipScreen> {
       case 1: return 'Silver Member';
       case 2: return 'Gold Member';
       case 3: return 'Platinum Member';
+      case 4: return 'Diamond Member';
       default: return 'Bronze Member';
     }
+  }
+
+  int _getTierDiscount(int tier) {
+    const discounts = [0, 5, 10, 15, 20];
+    return discounts[tier.clamp(0, 4)];
   }
 
   @override
@@ -205,7 +211,7 @@ class _QrMembershipScreenState extends State<QrMembershipScreen> {
                   mainAxisSpacing: 12,
                   childAspectRatio: 1.4,
                   children: [
-                    _BenefitCard(icon: Icons.percent_rounded, title: '15% Off', subtitle: 'All orders'),
+                    _BenefitCard(icon: Icons.percent_rounded, title: '${_getTierDiscount(customer.tier)}% Off', subtitle: 'All orders'),
                     _BenefitCard(icon: Icons.cake_rounded, title: 'Birthday Gift', subtitle: 'Free dessert'),
                     _BenefitCard(icon: Icons.event_seat_rounded, title: 'Priority Seating', subtitle: 'Skip the queue'),
                     _BenefitCard(icon: Icons.local_offer_rounded, title: 'Exclusive Deals', subtitle: 'Members only'),

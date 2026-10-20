@@ -61,6 +61,8 @@ class Reservation {
       'reservedAt': reservedAt.toIso8601String(),
       'status': status,
       'note': note,
+      'createdAt': createdAt.toIso8601String(),
+      'managerNote': managerNote,
       'customerId': customerId,
     };
   }

@@ -6,7 +6,6 @@ import 'package:doanquanlyquananai_mobileapp/services/invoice_service.dart';
 import 'package:doanquanlyquananai_mobileapp/core/utils/error_handler.dart';
 
 class OrderProvider with ChangeNotifier {
-
   OrderModel? _currentOrder;
   bool _isLoading = false;
   String _error = '';
@@ -25,13 +24,22 @@ class OrderProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String get error => _error;
 
-  void _resetCounters() {
+  void _resetCounters({bool keepVoidCount = false}) {
     _addCount = 0;
     _removeCount = 0;
-    _voidCount = 0;
+    if (!keepVoidCount) {
+      _voidCount = 0;
+    }
     _itemsRemovedAfterConfirm = 0;
     _confirmClicked = false;
     _tableOpenedAt = null;
+  }
+
+  /// Reset toàn bộ trạng thái đơn hàng sau khi thanh toán thành công
+  void clearCurrentOrderAfterCheckout() {
+    _currentOrder = null;
+    _resetCounters(keepVoidCount: false);
+    notifyListeners();
   }
 
   // Lấy order hiện tại của bàn (Status = 0)
@@ -43,13 +51,13 @@ class OrderProvider with ChangeNotifier {
     try {
       final orderService = OrderService();
       final result = await orderService.getOpenOrderByTable(tableId);
-      
+
       if (result.isSuccess) {
         _currentOrder = result.data;
         if (_currentOrder != null) {
-          _tableOpenedAt ??= _currentOrder!.openedAt; // Lưu lại thời gian mở bàn cho AI
+          _tableOpenedAt ??= _currentOrder!.openedAt;
         } else {
-          _resetCounters();
+          _resetCounters(keepVoidCount: true);
         }
       } else {
         _error = result.error ?? 'Lỗi tải order';
@@ -66,10 +74,13 @@ class OrderProvider with ChangeNotifier {
   Future<bool> createOrder(int tableId, int accountId) async {
     try {
       final orderService = OrderService();
-      final result = await orderService.createOrder(tableId: tableId, accountId: accountId);
-      
+      final result = await orderService.createOrder(
+        tableId: tableId,
+        accountId: accountId,
+      );
+
       if (result.isSuccess && result.data != null) {
-        _resetCounters();
+        _resetCounters(keepVoidCount: true);
         _tableOpenedAt = DateTime.now();
         _currentOrder = result.data;
         notifyListeners();
@@ -91,10 +102,14 @@ class OrderProvider with ChangeNotifier {
     if (_currentOrder == null) return false;
     try {
       final orderService = OrderService();
-      final result = await orderService.addItem(_currentOrder!.orderId, itemId, quantity);
-      
+      final result = await orderService.addItem(
+        _currentOrder!.orderId,
+        itemId,
+        quantity,
+      );
+
       if (result.isSuccess && result.data != null) {
-        _addCount++;
+        _addCount += quantity;
         _currentOrder = result.data;
         notifyListeners();
         return true;
@@ -115,16 +130,24 @@ class OrderProvider with ChangeNotifier {
     if (_currentOrder == null) return false;
 
     try {
-      final oldQty = _currentOrder!.items.firstWhere((i) => i.orderItemId == orderItemId).quantity;
+      final oldQty = _currentOrder!.items
+          .firstWhere((i) => i.orderItemId == orderItemId)
+          .quantity;
       final orderService = OrderService();
-      final result = await orderService.updateItemQty(_currentOrder!.orderId, orderItemId, quantity);
+      final result = await orderService.updateItemQty(
+        _currentOrder!.orderId,
+        orderItemId,
+        quantity,
+      );
 
       if (result.isSuccess && result.data != null) {
         if (quantity < oldQty) {
-          _removeCount++;
-          if (_confirmClicked) _itemsRemovedAfterConfirm++;
-        } else {
-          _addCount++;
+          final diff = oldQty - quantity;
+          _removeCount += diff;
+          _voidCount++;
+          if (_confirmClicked) _itemsRemovedAfterConfirm += diff;
+        } else if (quantity > oldQty) {
+          _addCount += (quantity - oldQty);
         }
         _currentOrder = result.data;
 
@@ -152,12 +175,17 @@ class OrderProvider with ChangeNotifier {
     if (_currentOrder == null) return false;
 
     try {
-      final item = _currentOrder!.items.firstWhere((i) => i.orderItemId == orderItemId);
+      final item = _currentOrder!.items
+          .firstWhere((i) => i.orderItemId == orderItemId);
       final orderService = OrderService();
-      final result = await orderService.removeItem(_currentOrder!.orderId, orderItemId);
+      final result = await orderService.removeItem(
+        _currentOrder!.orderId,
+        orderItemId,
+      );
 
       if (result.isSuccess && result.data != null) {
-        _removeCount++;
+        _removeCount += item.quantity;
+        _voidCount++;
         if (_confirmClicked) _itemsRemovedAfterConfirm += item.quantity;
         _currentOrder = result.data;
 
@@ -187,11 +215,11 @@ class OrderProvider with ChangeNotifier {
     try {
       final orderService = OrderService();
       final result = await orderService.cancelOrder(_currentOrder!.orderId);
-      
+
       if (result.isSuccess) {
         _voidCount++;
         _currentOrder = null;
-        _resetCounters();
+        _resetCounters(keepVoidCount: true);
         notifyListeners();
         return true;
       } else {
@@ -230,6 +258,7 @@ class OrderProvider with ChangeNotifier {
     required int paymentMethod,
     String? voucherCode,
     String? discountCampaignCode,
+    double? appliedDiscountPercent,
     double vatPercent = 8.0,
   }) async {
     if (_currentOrder == null) return null;
@@ -237,22 +266,21 @@ class OrderProvider with ChangeNotifier {
     try {
       final invoiceService = InvoiceService();
       final result = await invoiceService.checkout(
-        orderId:              _currentOrder!.orderId,
-        accountId:            accountId,
-        tableId:              _currentOrder!.tableId,
-        paymentMethod:        paymentMethod,
-        tracker:              getAiTracker(),
-        customerId:           customerId,
-        voucherCode:          voucherCode,
+        orderId: _currentOrder!.orderId,
+        accountId: accountId,
+        tableId: _currentOrder!.tableId,
+        paymentMethod: paymentMethod,
+        tracker: getAiTracker(),
+        customerId: customerId,
+        voucherCode: voucherCode,
         discountCampaignCode: discountCampaignCode,
-        vatPercent:           vatPercent,
+        appliedDiscountPercent: appliedDiscountPercent,
+        vatPercent: vatPercent,
       );
 
       if (result.isSuccess && result.data != null) {
         final resJson = result.data!.toJson();
-        _currentOrder = null;
-        _resetCounters();
-        notifyListeners();
+        clearCurrentOrderAfterCheckout();
         return resJson;
       } else {
         _error = result.error ?? 'Thanh toán thất bại';

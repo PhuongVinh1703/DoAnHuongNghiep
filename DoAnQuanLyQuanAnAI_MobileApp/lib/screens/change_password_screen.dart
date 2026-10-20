@@ -53,7 +53,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       AppSnackbar.showSuccess(context, 'Đổi mật khẩu thành công!');
       Navigator.pop(context);
     } else {
-      AppSnackbar.showError(context, 'Mật khẩu cũ không đúng. Vui lòng thử lại.');
+      AppSnackbar.showError(context, auth.errorMessage ?? 'Mật khẩu cũ không đúng. Vui lòng thử lại.');
     }
   }
 

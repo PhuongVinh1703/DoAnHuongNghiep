@@ -234,7 +234,11 @@ class CustomerService {
       final expiresAt = DateTime.now().add(Duration(days: reward['ValidDays'] as int));
 
       // 3. Trừ điểm khách hàng và chèn Voucher
-      await _db.from('Customers').update({'LoyaltyPoints': points - cost}).eq('CustomerId', customerId);
+      final updatedPoints = points - cost;
+      await _db.from('Customers').update({
+        'LoyaltyPoints': updatedPoints,
+        'Tier': Customer.calculateTier(updatedPoints),
+      }).eq('CustomerId', customerId);
 
       final newVoucher = await _db.from('CustomerVouchers').insert({
         'CustomerId': customerId,
@@ -262,14 +266,67 @@ class CustomerService {
     }
   }
 
-  /// Đổi mã QR token lấy điểm (quét hóa đơn tích điểm)
+  /// Đổi mã QR token hoặc mã QR hóa đơn ('INVOICE:INV-...') lấy điểm
   Future<ApiResult<void>> redeemQrToken(int customerId, String token) async {
     try {
-      // 1. Tìm transaction theo token
+      final cleanToken = token.trim();
+
+      // Hỗ trợ quét trực tiếp mã QR trên hóa đơn vãng lai (định dạng INVOICE:INV-xxx)
+      if (cleanToken.toUpperCase().startsWith('INVOICE:') ||
+          cleanToken.toUpperCase().startsWith('INV-')) {
+        final invoiceNo = cleanToken.toUpperCase().startsWith('INVOICE:')
+            ? cleanToken.substring('INVOICE:'.length).trim()
+            : cleanToken;
+        final inv = await _db
+            .from('Invoices')
+            .select('InvoiceId, InvoiceNo, TotalAmount, CustomerId')
+            .eq('InvoiceNo', invoiceNo)
+            .maybeSingle();
+
+        if (inv == null) {
+          return ApiResult.failure('Không tìm thấy hóa đơn $invoiceNo.');
+        }
+        if (inv['CustomerId'] != null) {
+          return ApiResult.failure('Hóa đơn này đã được tích điểm trước đó.');
+        }
+
+        final totalAmount = (inv['TotalAmount'] as num? ?? 0).toDouble();
+        final earnedPoints = (totalAmount / 100000).floor().clamp(1, 100000);
+
+        final cust = await _db
+            .from('Customers')
+            .select('LoyaltyPoints')
+            .eq('CustomerId', customerId)
+            .single();
+        final currentPoints = cust['LoyaltyPoints'] as int? ?? 0;
+        final updatedPoints = currentPoints + earnedPoints;
+
+        await _db.from('Customers').update({
+          'LoyaltyPoints': updatedPoints,
+          'Tier': Customer.calculateTier(updatedPoints),
+        }).eq('CustomerId', customerId);
+
+        await _db.from('Invoices').update({
+          'CustomerId': customerId,
+        }).eq('InvoiceId', inv['InvoiceId']);
+
+        await _db.from('PointTransactions').insert({
+          'CustomerId': customerId,
+          'PointDelta': earnedPoints,
+          'Note': 'Tích điểm từ hóa đơn $invoiceNo',
+          'QrToken': cleanToken,
+          'QrRedeemedAt': DateTime.now().toIso8601String(),
+          'CreatedAt': DateTime.now().toIso8601String(),
+        });
+
+        return ApiResult.success(null);
+      }
+
+      // 1. Tìm transaction theo QrToken chuẩn
       final tx = await _db
           .from('PointTransactions')
           .select()
-          .eq('QrToken', token)
+          .eq('QrToken', cleanToken)
           .maybeSingle();
 
       if (tx == null) {
@@ -293,9 +350,13 @@ class CustomerService {
           .single();
       final currentPoints = cust['LoyaltyPoints'] as int;
 
+      final updatedPoints = currentPoints + delta;
       await _db
           .from('Customers')
-          .update({'LoyaltyPoints': currentPoints + delta})
+          .update({
+            'LoyaltyPoints': updatedPoints,
+            'Tier': Customer.calculateTier(updatedPoints),
+          })
           .eq('CustomerId', customerId);
 
       // 3. Cập nhật transaction QR đã đổi
@@ -311,7 +372,7 @@ class CustomerService {
   }
 
   /// Kiểm tra voucher có hợp lệ không
-  Future<ApiResult<Voucher>> validateVoucher(String code, double subtotal) async {
+  Future<ApiResult<Voucher>> validateVoucher(String code, double subtotal, {int? customerId}) async {
     try {
       final res = await _db
           .from('CustomerVouchers')
@@ -325,6 +386,9 @@ class CustomerService {
         return ApiResult.failure('Mã Voucher không tồn tại hoặc đã sử dụng / hết hạn.');
       }
 
+      if (customerId != null && res['CustomerId'] != null && res['CustomerId'] != customerId) {
+        return ApiResult.failure('Voucher này thuộc về tài khoản khách hàng khác.');
+      }
       final voucher = Voucher.fromJson(res);
       if (subtotal < voucher.minSubtotal) {
         return ApiResult.failure('Đơn hàng chưa đạt giá trị tối thiểu để áp dụng Voucher này (Yêu cầu tối thiểu: ${voucher.minSubtotal}).');

@@ -93,11 +93,19 @@ class CustomerProvider with ChangeNotifier {
     final result = await _discountSvc.getCampaigns();
     if (result.isSuccess) {
       final now = DateTime.now();
-      _activeCampaigns = (result.data ?? []).where((c) =>
-        c.isActive &&
-        c.startDate.isBefore(now) &&
-        c.endDate.isAfter(now)
-      ).toList();
+      _activeCampaigns = (result.data ?? []).where((c) {
+        final effectiveEnd = DateTime(
+          c.endDate.year,
+          c.endDate.month,
+          c.endDate.day,
+          23,
+          59,
+          59,
+        );
+        return c.isActive &&
+            !now.isBefore(c.startDate) &&
+            !now.isAfter(effectiveEnd);
+      }).toList();
       notifyListeners();
     }
   }

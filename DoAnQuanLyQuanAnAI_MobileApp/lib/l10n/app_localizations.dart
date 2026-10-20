@@ -63,6 +63,7 @@ class AppLocalizations {
 
     // ── Staff / Tables ──────────────────────────────────
     'floor_plan': {'vi': 'Sơ đồ tầng', 'en': 'Floor Plan'},
+    'table': {'vi': 'Bàn', 'en': 'Table'},
     'tables': {'vi': 'Bàn', 'en': 'Tables'},
     'orders': {'vi': 'Đơn hàng', 'en': 'Orders'},
     'insights': {'vi': 'Thống kê', 'en': 'Insights'},
@@ -118,6 +119,7 @@ class AppLocalizations {
     'revenue': {'vi': 'Doanh thu', 'en': 'Revenue'},
     'avg_order': {'vi': 'TB đơn hàng', 'en': 'Avg. Order'},
     'cancels': {'vi': 'Hủy đơn', 'en': 'Cancels'},
+    'open_orders': {'vi': 'Đơn đang mở', 'en': 'Open Orders'},
     'action_required': {'vi': 'Cần xử lý', 'en': 'Action Required'},
     'inventory_anomaly': {'vi': 'Phát hiện bất thường kho rượu cao cấp. Xem đề xuất nhập hàng.', 'en': 'Inventory anomalies detected in premium wines. Review suggested restock.'},
     'top_selling': {'vi': 'Món bán chạy', 'en': 'Top Selling Items'},

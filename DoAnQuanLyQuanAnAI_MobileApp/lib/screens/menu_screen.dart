@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_theme.dart';
+import 'package:doanquanlyquananai_mobileapp/widgets/common/menu_item_image.dart';
 import 'package:doanquanlyquananai_mobileapp/services/menu_provider.dart';
 import 'package:doanquanlyquananai_mobileapp/models/menu/menu_item.dart';
 import 'package:doanquanlyquananai_mobileapp/models/menu/menu_category.dart';
@@ -149,27 +150,15 @@ class _MenuItemCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ─── Image placeholder ───────────────────
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.surfaceContainer,
-                    AppColors.surfaceContainerHigh,
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              ),
-              child: Center(
-                child: Text(
-                  item.emoji.isNotEmpty ? item.emoji : '🍽️',
-                  style: const TextStyle(fontSize: 36),
-                ),
-              ),
+            // ─── Hình ảnh món ăn thực tế ─────────────
+            MenuItemImage(
+              imagePath: item.imagePath,
+              itemName: item.name,
+              emoji: item.emoji,
+              width: 84,
+              height: 84,
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              emojiSize: 34,
             ),
 
             const SizedBox(width: 14),
@@ -221,16 +210,26 @@ class _MenuItemCard extends StatelessWidget {
                           color: AppColors.primary,
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.add_rounded,
-                          size: 18,
-                          color: Colors.white,
+                      GestureDetector(
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text("Món ${item.name} — Vui lòng chọn bàn ở tab Bàn để thêm vào đơn phục vụ."),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.add_rounded,
+                            size: 18,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ],

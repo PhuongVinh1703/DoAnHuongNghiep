@@ -45,10 +45,11 @@ class _VoucherLoyaltyScreenState extends State<VoucherLoyaltyScreen> with Single
 
   String _getTierName(int tier) {
     switch (tier) {
-      case 1: return 'Silver Member';
-      case 2: return 'Gold Member';
-      case 3: return 'Platinum Member';
-      default: return 'Bronze Member';
+      case 1: return 'Hạng Bạc (Silver)';
+      case 2: return 'Hạng Vàng (Gold)';
+      case 3: return 'Hạng VIP (Platinum)';
+      case 4: return 'Hạng Kim Cương (Diamond)';
+      default: return 'Hạng Đồng (Bronze)';
     }
   }
 

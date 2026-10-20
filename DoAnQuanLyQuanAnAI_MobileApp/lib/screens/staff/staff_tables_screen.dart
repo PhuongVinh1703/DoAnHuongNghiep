@@ -290,8 +290,11 @@ class _TableCard extends StatelessWidget {
         try {
           if (status == 1) { // Occupied
             await orderProvider.fetchOpenOrderForTable(table.tableId);
-          } else if (status == 0) { // Available
-            await orderProvider.createOrder(table.tableId, accountId);
+          } else if (status == 0 || status == 2) { // Available hoặc Reserved (khách đặt trước đã đến)
+            await orderProvider.fetchOpenOrderForTable(table.tableId);
+            if (orderProvider.currentOrder == null) {
+              await orderProvider.createOrder(table.tableId, accountId);
+            }
           }
         } finally {
           if (context.mounted) {
@@ -303,7 +306,7 @@ class _TableCard extends StatelessWidget {
         
         if (orderProvider.currentOrder != null) {
           // Cập nhật trạng thái bàn cục bộ trước để giao diện lập tức phản ánh
-          if (status == 0) {
+          if (status == 0 || status == 2) {
             tableProvider.updateTableStatus(table.tableId, 1);
           }
 

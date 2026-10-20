@@ -93,9 +93,18 @@ class DashboardService {
       final openOrdersList = await orderQuery;
       int openOrders = openOrdersList.length;
 
-      // 3. Lấy số cảnh báo chưa giải quyết (IsResolved = false)
-      final alertsList = await _db.from('Alerts').select('AlertId').eq('IsResolved', false);
-      int unresolvedAlerts = alertsList.length;
+      // 3. Lấy số cảnh báo chưa giải quyết (IsResolved = false), có lọc theo chi nhánh nếu có
+      final alertsList = await _db
+          .from('Alerts')
+          .select('AlertId, Orders(DiningTables(BranchId))')
+          .eq('IsResolved', false);
+      int unresolvedAlerts = (alertsList as List).where((a) {
+        if (branchId == null) return true;
+        final order = a['Orders'] as Map?;
+        final table = order?['DiningTables'] as Map?;
+        final alertBranchId = table?['BranchId'] as int?;
+        return alertBranchId == null || alertBranchId == branchId;
+      }).length;
 
       return ApiResult.success(DashboardData(
         totalRevenue: totalRevenue,

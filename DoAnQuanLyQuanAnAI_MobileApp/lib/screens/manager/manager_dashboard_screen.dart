@@ -465,11 +465,11 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                           ),
                           const SizedBox(width: 12),
                           _MetricCard(
-                            label: l10n.translate('cancels'),
+                            label: l10n.translate('open_orders'),
                             value: '${sum.openOrders}',
                             change: '',
-                            icon: Icons.cancel_outlined,
-                            positive: false,
+                            icon: Icons.pending_actions_rounded,
+                            positive: true,
                           ),
                         ],
                       ),
@@ -861,7 +861,7 @@ class _NavGrid extends StatelessWidget {
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
-                      color: i == 4
+                      color: item['route'] == '/ai_alerts'
                           ? AppColors.errorContainer
                           : AppColors.surfaceContainerHigh,
                       borderRadius: BorderRadius.circular(AppTheme.radiusMd),
@@ -869,7 +869,7 @@ class _NavGrid extends StatelessWidget {
                     child: Icon(
                       item['icon'] as IconData,
                       size: 24,
-                      color: i == 4
+                      color: item['route'] == '/ai_alerts'
                           ? AppColors.error
                           : AppColors.onSurfaceVariant,
                     ),

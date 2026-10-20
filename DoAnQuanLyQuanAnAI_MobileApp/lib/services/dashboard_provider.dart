@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:doanquanlyquananai_mobileapp/core/network/api_response.dart';
 import 'package:doanquanlyquananai_mobileapp/services/dashboard_service.dart';
@@ -108,6 +109,14 @@ class DashboardProvider extends ChangeNotifier {
 
   int? _lastBranchId;
   RealtimeChannel? _realtimeChannel;
+  Timer? _debounceTimer;
+
+  void _scheduleRealtimeRefresh() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 400), () {
+      loadDashboardData(branchId: _lastBranchId, showLoading: false);
+    });
+  }
 
   void _subscribeRealtime() {
     if (_realtimeChannel != null) return;
@@ -120,33 +129,25 @@ class DashboardProvider extends ChangeNotifier {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'Invoices',
-          callback: (payload) {
-            loadDashboardData(branchId: _lastBranchId, showLoading: false);
-          },
+          callback: (_) => _scheduleRealtimeRefresh(),
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'InvoiceItems',
-          callback: (payload) {
-            loadDashboardData(branchId: _lastBranchId, showLoading: false);
-          },
+          callback: (_) => _scheduleRealtimeRefresh(),
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'Orders',
-          callback: (payload) {
-            loadDashboardData(branchId: _lastBranchId, showLoading: false);
-          },
+          callback: (_) => _scheduleRealtimeRefresh(),
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'Alerts',
-          callback: (payload) {
-            loadDashboardData(branchId: _lastBranchId, showLoading: false);
-          },
+          callback: (_) => _scheduleRealtimeRefresh(),
         );
 
     _realtimeChannel!.subscribe();
@@ -154,6 +155,7 @@ class DashboardProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     if (_realtimeChannel != null) {
       Supabase.instance.client.removeChannel(_realtimeChannel!);
     }

@@ -59,7 +59,7 @@ class LocalCache {
   }
 
   // ── Settings ─────────────────────────────────────────────────
-  static const _langKey    = 'app_lang';
+  static const _langKey    = 'app_locale';
   static const _themeKey   = 'app_theme';
 
   static String getLanguage() => _p.getString(_langKey) ?? 'vi';

@@ -117,9 +117,15 @@ class _CustomerLookupScreenState extends State<CustomerLookupScreen> {
   }
 
   Widget _buildCustomerCard(Customer c) {
-    final tierColors = [AppColors.tierBronze, AppColors.tierSilver, AppColors.tierGold];
-    final tierLabels = ['Bronze', 'Silver', 'Gold'];
-    final tierColor = tierColors[c.tier.clamp(0, 2)];
+    final tierColors = [
+      AppColors.tierBronze,
+      AppColors.tierSilver,
+      AppColors.tierGold,
+      AppColors.tierPlatinum,
+      AppColors.tierDiamond,
+    ];
+    final tierLabels = ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond'];
+    final tierColor = tierColors[c.tier.clamp(0, 4)];
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -158,7 +164,7 @@ class _CustomerLookupScreenState extends State<CustomerLookupScreen> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            '⭐ ${tierLabels[c.tier.clamp(0, 2)]} · ${c.totalPoints} điểm',
+                            '⭐ ${tierLabels[c.tier.clamp(0, 4)]} · ${c.totalPoints} điểm',
                             style: TextStyle(fontSize: 11, color: tierColor, fontWeight: FontWeight.w600),
                           ),
                         ),

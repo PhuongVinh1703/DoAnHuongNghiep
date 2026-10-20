@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:doanquanlyquananai_mobileapp/l10n/app_localizations.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_theme.dart';
 
@@ -15,11 +16,12 @@ class AppBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final items = [
-      _NavItem(icon: Icons.grid_view_rounded, label: 'Tables', index: 0),
-      _NavItem(icon: Icons.receipt_long_rounded, label: 'Orders', index: 1),
-      _NavItem(icon: Icons.insights_rounded, label: 'Insights', index: 2),
-      _NavItem(icon: Icons.person_rounded, label: 'Profile', index: 3),
+      _NavItem(icon: Icons.grid_view_rounded, label: l10n.translate('tables'), index: 0),
+      _NavItem(icon: Icons.receipt_long_rounded, label: l10n.translate('orders'), index: 1),
+      _NavItem(icon: Icons.restaurant_menu_rounded, label: l10n.translate('menu'), index: 2),
+      _NavItem(icon: Icons.person_rounded, label: l10n.translate('profile'), index: 3),
     ];
 
     return Container(

@@ -77,6 +77,9 @@ class AuthService extends ChangeNotifier {
       if (_currentUser!.branchId != null) {
         await _storage.write(key: AppConstants.branchIdKey, value: _currentUser!.branchId.toString());
       }
+      if (_currentUser!.avatar != null) {
+        await _storage.write(key: 'user_avatar', value: _currentUser!.avatar);
+      }
 
       _isLoading = false;
       notifyListeners();
@@ -106,6 +109,7 @@ class AuthService extends ChangeNotifier {
     final username  = await _storage.read(key: AppConstants.userNameKey);
     final fullName  = await _storage.read(key: AppConstants.fullNameKey);
     final branchId  = await _storage.read(key: AppConstants.branchIdKey);
+    final avatar    = await _storage.read(key: 'user_avatar');
 
     if (accountId == null || role == null || username == null || fullName == null) {
       return false;
@@ -118,6 +122,7 @@ class AuthService extends ChangeNotifier {
       fullName:  fullName,
       role:      int.parse(role),
       branchId:  branchId != null ? int.parse(branchId) : null,
+      avatar:    avatar,
     );
     notifyListeners();
     return true;
@@ -313,6 +318,23 @@ class AuthService extends ChangeNotifier {
         avatar:    _currentUser!.avatar,
       );
       await _storage.write(key: AppConstants.fullNameKey, value: newName);
+      notifyListeners();
+    }
+  }
+
+  /// Cập nhật ảnh đại diện trong cache sau khi tải lên Supabase Storage
+  Future<void> updateCachedAvatar(String newAvatarUrl) async {
+    if (_currentUser != null) {
+      _currentUser = LoginResponse(
+        token:     _currentUser!.token,
+        accountId: _currentUser!.accountId,
+        username:  _currentUser!.username,
+        fullName:  _currentUser!.fullName,
+        role:      _currentUser!.role,
+        branchId:  _currentUser!.branchId,
+        avatar:    newAvatarUrl,
+      );
+      await _storage.write(key: 'user_avatar', value: newAvatarUrl);
       notifyListeners();
     }
   }

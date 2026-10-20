@@ -35,6 +35,10 @@ class DiscountService {
       }
 
       final campaign = DiscountCampaign.fromJson(res);
+      if (campaign.usageLimit > 0 &&
+          campaign.usedCount >= campaign.usageLimit) {
+        return ApiResult.failure('Mã khuyến mãi này đã hết lượt sử dụng.');
+      }
       if (subtotal < campaign.minOrderValue) {
         return ApiResult.failure('Đơn hàng chưa đạt giá trị tối thiểu để áp dụng mã khuyến mãi này (Yêu cầu tối thiểu: ${campaign.minOrderValue}).');
       }

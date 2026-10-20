@@ -235,8 +235,14 @@ class _ReservationManageScreenState extends State<ReservationManageScreen>
     // Check if there is an existing assignment to populate fields
     if (r.managerNote != null && r.managerNote!.isNotEmpty) {
       final note = r.managerNote!;
-      // Pre-populate custom note text field if it doesn't match clean structure, or just show it
-      customNoteCtrl.text = note.split('Ghi chú thêm: ').last;
+      if (note.contains('Ghi chú thêm: ')) {
+        final rawCustom = note.split('Ghi chú thêm: ').last;
+        customNoteCtrl.text = rawCustom.endsWith(']')
+            ? rawCustom.substring(0, rawCustom.length - 1).trim()
+            : rawCustom.trim();
+      } else if (!note.startsWith('[Giao việc:')) {
+        customNoteCtrl.text = note;
+      }
     }
 
     showModalBottomSheet(

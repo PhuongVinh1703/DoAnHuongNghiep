@@ -788,7 +788,7 @@ class _AddStaffSheetState extends State<_AddStaffSheet> {
                 Text('Chi nhánh *', style: TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant)),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<int>(
-                  value: _selectedBranchId,
+                  initialValue: _selectedBranchId,
                   decoration: const InputDecoration(
                     prefixIcon: Icon(Icons.store_outlined),
                     border: OutlineInputBorder(),

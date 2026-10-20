@@ -3,6 +3,7 @@ class OrderItem {
   final int itemId;
   final String itemName;
   final String? emoji;
+  final String? imagePath;
   int quantity;
   final double unitPrice;
   final double lineTotal;
@@ -14,6 +15,7 @@ class OrderItem {
     required this.itemId,
     required this.itemName,
     this.emoji,
+    this.imagePath,
     required this.quantity,
     required this.unitPrice,
     required this.lineTotal,
@@ -22,20 +24,29 @@ class OrderItem {
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
-    final double uPrice = (json['unitPrice'] ?? json['UnitPrice'] ?? 0).toDouble();
+    final double uPrice =
+        (json['unitPrice'] ?? json['UnitPrice'] ?? 0).toDouble();
     final int qty = json['quantity'] ?? json['Quantity'] ?? 1;
+    final menuMap = json['MenuItems'] as Map?;
     return OrderItem(
       orderItemId: json['orderItemId'] ?? json['OrderItemId'] ?? 0,
-      itemId:      json['itemId']      ?? json['ItemId']      ?? 0,
-      itemName:    json['itemName']    ?? json['ItemName']    ?? 
-                   (json['MenuItems'] as Map?)?['Name']       ?? '',
-      emoji:       json['emoji']       ?? json['Emoji']       ?? 
-                   (json['MenuItems'] as Map?)?['Emoji'],
-      quantity:    qty,
-      unitPrice:   uPrice,
-      lineTotal:   (json['lineTotal'] ?? json['LineTotal'] ?? uPrice * qty).toDouble(),
-      note:        json['note']        ?? json['Note'],
-      isDeleted:   json['isDeleted']   ?? json['IsDeleted']   ?? false,
+      itemId: json['itemId'] ?? json['ItemId'] ?? 0,
+      itemName: json['itemName'] ??
+          json['ItemName'] ??
+          menuMap?['Name'] ??
+          menuMap?['name'] ??
+          '',
+      emoji: json['emoji'] ?? json['Emoji'] ?? menuMap?['Emoji'] ?? menuMap?['emoji'],
+      imagePath: json['imagePath'] ??
+          json['ImagePath'] ??
+          menuMap?['ImagePath'] ??
+          menuMap?['imagePath'],
+      quantity: qty,
+      unitPrice: uPrice,
+      lineTotal:
+          (json['lineTotal'] ?? json['LineTotal'] ?? uPrice * qty).toDouble(),
+      note: json['note'] ?? json['Note'],
+      isDeleted: json['isDeleted'] ?? json['IsDeleted'] ?? false,
     );
   }
 
@@ -45,6 +56,7 @@ class OrderItem {
       'itemId': itemId,
       'itemName': itemName,
       'emoji': emoji,
+      'imagePath': imagePath,
       'quantity': quantity,
       'unitPrice': unitPrice,
       'lineTotal': lineTotal,

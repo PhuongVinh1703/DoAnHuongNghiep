@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_theme.dart';
+import 'package:doanquanlyquananai_mobileapp/widgets/common/menu_item_image.dart';
 import 'package:doanquanlyquananai_mobileapp/services/menu_provider.dart';
 import 'package:doanquanlyquananai_mobileapp/services/order_provider.dart';
 import 'package:doanquanlyquananai_mobileapp/models/menu/menu_item.dart';
@@ -328,20 +329,17 @@ class _MenuItemCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ─── Image ─────────────────────────────
+          // ─── Hình ảnh món ăn thực tế ───────────
           Expanded(
-            child: Container(
+            child: MenuItemImage(
+              imagePath: item.imagePath,
+              itemName: item.name,
+              emoji: item.emoji,
               width: double.infinity,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceContainer,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(AppTheme.radiusLg - 1)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(AppTheme.radiusLg - 1),
               ),
-              child: Center(
-                child: Text(
-                  item.emoji.isNotEmpty ? item.emoji : '🍽️',
-                  style: const TextStyle(fontSize: 48),
-                ),
-              ),
+              emojiSize: 44,
             ),
           ),
 

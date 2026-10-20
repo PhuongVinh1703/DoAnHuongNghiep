@@ -8,6 +8,7 @@ import 'package:doanquanlyquananai_mobileapp/services/branch_service.dart';
 import 'package:doanquanlyquananai_mobileapp/models/branch/branch.dart';
 import 'package:doanquanlyquananai_mobileapp/widgets/common/app_snackbar.dart';
 import 'package:intl/intl.dart';
+import 'package:doanquanlyquananai_mobileapp/screens/manager/alert_detail_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AiAlertsScreen extends StatefulWidget {
@@ -366,8 +367,25 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
                             itemCount: _filteredAlerts.length,
                             separatorBuilder: (context, index) =>
                                 const SizedBox(height: 12),
-                            itemBuilder: (context, index) =>
-                                _AlertCard(alert: _filteredAlerts[index]),
+                            itemBuilder: (context, index) {
+                              final alert = _filteredAlerts[index];
+                              return _AlertCard(
+                                alert: alert,
+                                onTap: () async {
+                                  final resolved = await Navigator.push<bool>(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => AlertDetailScreen(
+                                        alertId: alert.alertId,
+                                      ),
+                                    ),
+                                  );
+                                  if (mounted && resolved == true) {
+                                    _loadData(showLoading: false);
+                                  }
+                                },
+                              );
+                            },
                           ),
                   ),
                 ],
@@ -432,8 +450,9 @@ class _SummaryCard extends StatelessWidget {
 
 class _AlertCard extends StatelessWidget {
   final Alert alert;
+  final VoidCallback onTap;
 
-  const _AlertCard({required this.alert});
+  const _AlertCard({required this.alert, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -458,7 +477,9 @@ class _AlertCard extends StatelessWidget {
       statusType = StatusType.draft;
     }
 
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       decoration: BoxDecoration(
         color: isUnread
             ? riskColor.withAlpha(8)
@@ -664,6 +685,7 @@ class _AlertCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

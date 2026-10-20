@@ -20,6 +20,8 @@ import 'package:doanquanlyquananai_mobileapp/widgets/common/money_text.dart';
 import 'package:doanquanlyquananai_mobileapp/widgets/order/order_item_tile.dart';
 import 'package:doanquanlyquananai_mobileapp/widgets/order/qr_payment_dialog.dart';
 import 'invoice_success_screen.dart';
+import 'customer_lookup_screen.dart';
+import 'customer_register_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final OrderModel order;
@@ -153,6 +155,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       customerId:    _customer?.customerId,
       voucherCode:   _voucher?.voucherCode,
       discountCampaignCode: _campaign?.code,
+      appliedDiscountPercent: _voucher != null
+          ? _voucher!.discountAmount
+          : (_campaign != null ? _campaign!.discountValue : 0.0),
       vatPercent:    _vat,
     );
     if (!mounted) return;
@@ -161,6 +166,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     result.fold(
       onSuccess: (resp) {
         context.read<CartProvider>().clear();
+        orderProvider.clearCurrentOrderAfterCheckout();
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
@@ -255,6 +261,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 description: '',
                 price: item.unitPrice,
                 emoji: item.emoji ?? '🍽️',
+                imagePath: item.imagePath,
                 isAvailable: true,
                 categoryName: '',
               ),
@@ -303,25 +310,74 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
           )
         else
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: _phoneCtrl,
-                  keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(
-                    hintText: 'Nhập số điện thoại khách...',
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        hintText: 'Nhập số điện thoại khách...',
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  AppButton(
+                    label: 'Tìm',
+                    onPressed: _findCustomer,
+                    isLoading: _isFindingCustomer,
+                    height: 44,
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              AppButton(
-                label: 'Tìm',
-                onPressed: _findCustomer,
-                isLoading: _isFindingCustomer,
-                height: 44,
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: () async {
+                      final selected = await Navigator.push<Customer>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const CustomerLookupScreen(),
+                        ),
+                      );
+                      if (selected != null && mounted) {
+                        setState(() {
+                          _customer = selected;
+                          _phoneCtrl.text = selected.phone;
+                        });
+                      }
+                    },
+                    icon: const Icon(Icons.person_search_outlined, size: 18),
+                    label: const Text('Tra cứu nâng cao'),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: () async {
+                      final registered = await Navigator.push<Customer>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CustomerRegisterScreen(
+                            prefillPhone: _phoneCtrl.text.trim(),
+                          ),
+                        ),
+                      );
+                      if (registered != null && mounted) {
+                        setState(() {
+                          _customer = registered;
+                          _phoneCtrl.text = registered.phone;
+                        });
+                      }
+                    },
+                    icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
+                    label: const Text('Đăng ký khách mới'),
+                  ),
+                ],
               ),
             ],
           ),

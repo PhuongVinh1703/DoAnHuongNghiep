@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:doanquanlyquananai_mobileapp/core/constants/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/core/utils/money_formatter.dart';
 import 'package:doanquanlyquananai_mobileapp/services/cart_provider.dart';
+import 'package:doanquanlyquananai_mobileapp/widgets/common/menu_item_image.dart';
 
 class OrderItemTile extends StatelessWidget {
   final CartItem item;
@@ -31,20 +32,15 @@ class OrderItemTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Emoji
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Center(
-              child: Text(
-                item.menuItem.emoji.isNotEmpty ? item.menuItem.emoji : '🍽️',
-                style: const TextStyle(fontSize: 22),
-              ),
-            ),
+          // Hình ảnh món ăn thực tế
+          MenuItemImage(
+            imagePath: item.menuItem.imagePath,
+            itemName: item.menuItem.name,
+            emoji: item.menuItem.emoji,
+            width: 48,
+            height: 48,
+            borderRadius: BorderRadius.circular(10),
+            emojiSize: 22,
           ),
           const SizedBox(width: 12),
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:doanquanlyquananai_mobileapp/config/constants.dart';
+import 'package:doanquanlyquananai_mobileapp/l10n/app_localizations.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_theme.dart';
 import 'package:doanquanlyquananai_mobileapp/services/auth_service.dart';
@@ -12,6 +13,7 @@ import 'package:doanquanlyquananai_mobileapp/screens/customer/voucher_loyalty_sc
 import 'package:doanquanlyquananai_mobileapp/screens/customer/qr_membership_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/menu_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/profile_screen.dart';
+import 'package:doanquanlyquananai_mobileapp/widgets/common/menu_item_image.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -52,11 +54,12 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   }
 
   Widget _buildBottomNav() {
+    final l10n = AppLocalizations.of(context);
     final items = [
-      _NavItem(Icons.home_rounded, 'Home'),
-      _NavItem(Icons.restaurant_menu_rounded, 'Menu'),
-      _NavItem(Icons.card_giftcard_rounded, 'Vouchers'),
-      _NavItem(Icons.person_rounded, 'Profile'),
+      _NavItem(Icons.home_rounded, l10n.translate('home')),
+      _NavItem(Icons.restaurant_menu_rounded, l10n.translate('menu')),
+      _NavItem(Icons.card_giftcard_rounded, l10n.translate('vouchers')),
+      _NavItem(Icons.person_rounded, l10n.translate('profile')),
     ];
 
     return Container(
@@ -106,11 +109,19 @@ class _HomeContent extends StatelessWidget {
 
   String _getTierName(int tier) {
     switch (tier) {
-      case 1: return 'Silver Member';
-      case 2: return 'Gold Member';
-      case 3: return 'Platinum Member';
-      default: return 'Bronze Member';
+      case 1: return 'Hạng Bạc (Silver)';
+      case 2: return 'Hạng Vàng (Gold)';
+      case 3: return 'Hạng VIP (Platinum)';
+      case 4: return 'Hạng Kim Cương (Diamond)';
+      default: return 'Hạng Đồng (Bronze)';
     }
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Chào buổi sáng,';
+    if (hour < 18) return 'Chào buổi chiều,';
+    return 'Chào buổi tối,';
   }
 
   @override
@@ -128,13 +139,14 @@ class _HomeContent extends StatelessWidget {
           // Greeting
           Row(children: [
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Chào buổi tối,', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.onSurfaceVariant)),
+              Text(_getGreeting(), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.onSurfaceVariant)),
               Text(userName, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
             ])),
-            Container(
-              width: 48, height: 48,
-              decoration: BoxDecoration(gradient: AppColors.aiGradient, shape: BoxShape.circle),
-              child: const Icon(Icons.person_rounded, color: Colors.white, size: 24),
+            UserAvatarImage(
+              avatarUrl: user?.avatar,
+              fullName: userName,
+              role: user?.role ?? 3,
+              size: 48,
             ),
           ]),
 
@@ -228,31 +240,43 @@ class _HomeContent extends StatelessWidget {
 
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: const LinearGradient(colors: [Color(0xFFFFF1EC), Color(0xFFFFE9E1)], begin: Alignment.topLeft, end: Alignment.bottomRight),
               borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+              boxShadow: AppTheme.shadowLevel1,
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: AppColors.secondaryContainer, borderRadius: BorderRadius.circular(100)),
-                child: const Text('🔥 Giới hạn', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF6F5900))),
+              const MenuItemImage(
+                imagePath: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=900&q=80',
+                itemName: 'Lễ hội Hải sản Mùa hè',
+                width: double.infinity,
+                height: 150,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.radiusLg)),
               ),
-              const SizedBox(height: 12),
-              const Text('Lễ hội Hải sản Mùa hè', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 6),
-              Text('Thưởng thức những món hải sản tươi ngon nhất được chế biến bởi đầu bếp 5 sao.', style: TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant, height: 1.5)),
-              const SizedBox(height: 14),
-              ElevatedButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const MenuScreen(initialCategoryId: 3),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: AppColors.secondaryContainer, borderRadius: BorderRadius.circular(100)),
+                    child: const Text('🔥 Giới hạn', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF6F5900))),
                   ),
-                ),
-                style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
-                child: const Text('Xem Thực Đơn'),
+                  const SizedBox(height: 10),
+                  const Text('Lễ hội Hải sản Mùa hè', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 6),
+                  Text('Thưởng thức những món hải sản tươi ngon nhất được chế biến bởi đầu bếp 5 sao.', style: TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant, height: 1.5)),
+                  const SizedBox(height: 14),
+                  ElevatedButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MenuScreen(initialCategoryId: 3),
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+                    child: const Text('Xem Thực Đơn'),
+                  ),
+                ]),
               ),
             ]),
           ),

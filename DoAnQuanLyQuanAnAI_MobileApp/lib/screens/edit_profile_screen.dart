@@ -4,6 +4,9 @@ import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/services/auth_service.dart';
 import 'package:doanquanlyquananai_mobileapp/services/customer_provider.dart';
 import 'package:doanquanlyquananai_mobileapp/services/customer_service.dart';
+import 'package:doanquanlyquananai_mobileapp/services/storage_service.dart';
+import 'package:doanquanlyquananai_mobileapp/widgets/common/menu_item_image.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:doanquanlyquananai_mobileapp/widgets/common/app_snackbar.dart';
 import 'package:doanquanlyquananai_mobileapp/widgets/common/app_button.dart';
 import 'package:doanquanlyquananai_mobileapp/models/auth/login_response.dart';
@@ -31,8 +34,52 @@ class _EditProfileScreenState extends State<EditProfileScreen> with SingleTicker
   final _branchAddressCtrl = TextEditingController();
   final _branchPhoneCtrl = TextEditingController();
 
+  final _storageSvc = StorageService();
   bool _isLoading = false;
   bool _isBranchLoading = false;
+  bool _isUploadingAvatar = false;
+
+  Future<void> _uploadAvatar() async {
+    final auth = context.read<AuthService>();
+    final user = auth.currentUser;
+    if (user == null) return;
+
+    setState(() => _isUploadingAvatar = true);
+    final res = await _storageSvc.pickAndUploadImage(
+      source: ImageSource.gallery,
+      folder: 'avatars',
+    );
+    if (!mounted) return;
+
+    await res.fold(
+      onSuccess: (url) async {
+        if (url != null && url.isNotEmpty) {
+          try {
+            await Supabase.instance.client
+                .from('Accounts')
+                .update({'Avatar': url})
+                .eq('AccountId', user.accountId);
+            await auth.updateCachedAvatar(url);
+            if (mounted) {
+              AppSnackbar.showSuccess(
+                context,
+                'Đã cập nhật ảnh đại diện lên Supabase Storage!',
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              AppSnackbar.showError(context, 'Lỗi lưu ảnh đại diện: $e');
+            }
+          }
+        }
+      },
+      onFailure: (err) async {
+        if (mounted) AppSnackbar.showError(context, err);
+      },
+    );
+
+    if (mounted) setState(() => _isUploadingAvatar = false);
+  }
 
   @override
   void initState() {
@@ -250,10 +297,50 @@ class _EditProfileScreenState extends State<EditProfileScreen> with SingleTicker
               ),
               child: Column(
                 children: [
-                  CircleAvatar(
-                    radius: 36,
-                    backgroundColor: AppColors.primary.withAlpha(30),
-                    child: const Icon(Icons.person_outline_rounded, size: 36, color: AppColors.primary),
+                  Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
+                      UserAvatarImage(
+                        avatarUrl: user?.avatar,
+                        fullName: user?.fullName ?? 'Hồ sơ',
+                        role: user?.role ?? 3,
+                        size: 80,
+                      ),
+                      if (_isUploadingAvatar)
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: const BoxDecoration(
+                            color: Colors.black45,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          ),
+                        ),
+                      GestureDetector(
+                        onTap: _isUploadingAvatar ? null : _uploadAvatar,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt_rounded,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   Text(
