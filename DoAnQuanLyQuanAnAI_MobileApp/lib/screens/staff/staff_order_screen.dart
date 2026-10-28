@@ -7,6 +7,8 @@ import 'package:doanquanlyquananai_mobileapp/models/order/order.dart';
 import 'package:doanquanlyquananai_mobileapp/services/order_service.dart';
 import 'package:doanquanlyquananai_mobileapp/services/order_provider.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/staff/menu_order_screen.dart';
+import 'package:doanquanlyquananai_mobileapp/theme/app_haptics.dart';
+import 'package:doanquanlyquananai_mobileapp/widgets/common/app_shimmer.dart';
 
 class StaffOrderScreen extends StatefulWidget {
   const StaffOrderScreen({super.key});
@@ -89,6 +91,7 @@ class _StaffOrderScreenState extends State<StaffOrderScreen> {
                       : AppColors.onSurfaceVariant,
                 ),
                 onSelected: (val) {
+                  AppHaptics.selection();
                   setState(() => _statusFilter = val == -1 ? null : val);
                   _loadOrders();
                 },
@@ -106,7 +109,7 @@ class _StaffOrderScreenState extends State<StaffOrderScreen> {
         // ─── Order List ──────────────────────────────
         Expanded(
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? const CardListShimmer(count: 5, cardHeight: 110)
               : _error != null
                   ? Center(child: Text(_error!))
                   : RefreshIndicator(
@@ -123,6 +126,7 @@ class _StaffOrderScreenState extends State<StaffOrderScreen> {
                             order: order,
                             onTap: order.status == 0
                                 ? () async {
+                                    AppHaptics.light();
                                     final orderProvider =
                                         context.read<OrderProvider>();
                                     await orderProvider

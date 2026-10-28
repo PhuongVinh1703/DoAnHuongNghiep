@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:doanquanlyquananai_mobileapp/core/constants/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/core/utils/money_formatter.dart';
+import 'package:doanquanlyquananai_mobileapp/theme/app_haptics.dart';
 import 'package:doanquanlyquananai_mobileapp/core/storage/secure_storage.dart';
 import 'package:doanquanlyquananai_mobileapp/models/customer/customer.dart';
 import 'package:doanquanlyquananai_mobileapp/models/customer/voucher.dart';
@@ -165,6 +166,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     result.fold(
       onSuccess: (resp) {
+        AppHaptics.success();
         context.read<CartProvider>().clear();
         orderProvider.clearCurrentOrderAfterCheckout();
         if (!mounted) return;
@@ -179,6 +181,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         );
       },
       onFailure: (e) {
+        AppHaptics.error();
         if (!mounted) return;
         AppSnackbar.showError(context, e);
       },
@@ -465,7 +468,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _sectionTitle('💳 Phương thức thanh toán'),
         RadioGroup<int>(
           groupValue: _paymentMethod,
-          onChanged: (v) => setState(() => _paymentMethod = v!),
+          onChanged: (v) {
+            AppHaptics.selection();
+            setState(() => _paymentMethod = v!);
+          },
           child: Column(
             children: [
               (0, Icons.money, 'Tiền mặt'),

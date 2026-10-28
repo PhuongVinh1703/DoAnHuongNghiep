@@ -42,6 +42,37 @@ class AppTheme {
         ),
       ];
 
+  // ── Card & Surface Decorations ─────────────────────────
+  static BoxDecoration cardDecoration({
+    Color? color,
+    Color? borderColor,
+    double? radius,
+    List<BoxShadow>? shadows,
+  }) =>
+      BoxDecoration(
+        color: color ?? AppColors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(radius ?? radiusMd),
+        border: Border.all(
+          color: borderColor ?? AppColors.outlineVariant.withAlpha(80),
+          width: 1,
+        ),
+        boxShadow: shadows ?? shadowLevel1,
+      );
+
+  static BoxDecoration statusCardDecoration({
+    required Color statusColor,
+    Color? bgColor,
+    double? radius,
+  }) =>
+      BoxDecoration(
+        color: bgColor ?? statusColor.withAlpha(20),
+        borderRadius: BorderRadius.circular(radius ?? radiusMd),
+        border: Border.all(
+          color: statusColor.withAlpha(70),
+          width: 1.2,
+        ),
+      );
+
   // ── Light Theme ───────────────────────────────────────
   static ThemeData get lightTheme {
     return ThemeData(

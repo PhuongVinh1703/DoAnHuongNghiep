@@ -1,4 +1,4 @@
-﻿# 🍽️ Reserve & Relish — AI Smart Restaurant Management System
+# 🍽️ Reserve & Relish — AI Smart Restaurant Management System
 
 <div align="center">
 
@@ -130,8 +130,8 @@ Flask REST API chạy mô hình Machine Learning phát hiện giao dịch bất 
 ### 👤 Customer (Flutter Mobile)
 | Tính năng | Mô tả |
 |-----------|-------|
-| Đặt bàn trực tuyến | Chọn ngày, giờ, số người |
-| Pre-order | Đặt món trước khi đến nhà hàng |
+| Đặt bàn trực tuyến | Chọn chi nhánh, ngày, giờ, số người, ghi chú |
+| Xem thực đơn | Tra cứu món ăn, danh mục, giá cả và mô tả món |
 | Tích điểm & Loyalty | Xem điểm thưởng, lịch sử |
 | Voucher | Nhận và dùng mã giảm giá |
 | QR Membership | Thẻ thành viên dạng QR code |

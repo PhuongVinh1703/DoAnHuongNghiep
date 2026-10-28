@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:doanquanlyquananai_mobileapp/screens/customer/pre_order_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_theme.dart';
 import 'package:doanquanlyquananai_mobileapp/services/auth_service.dart';
@@ -123,28 +122,9 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen>
     final cust = prov.currentCustomer;
     final user = auth.currentUser;
 
-    // Ask user if they want to pre-order and deposit
-    final String? preOrderNote = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PreOrderScreen(
-          customerName: cust?.fullName ?? user?.fullName ?? 'Khách',
-          customerPhone: cust?.phone ?? user?.username ?? '',
-        ),
-      ),
-    );
-
-    if (preOrderNote == null) {
-      // User cancelled the booking/payment flow
-      return;
-    }
-
     setState(() => _isSubmitting = true);
 
-    String noteStr = _noteController.text.trim();
-    if (preOrderNote.isNotEmpty) {
-      noteStr = noteStr.isEmpty ? preOrderNote : '$noteStr\n$preOrderNote';
-    }
+    final String noteStr = _noteController.text.trim();
 
     final result = await _reservationSvc.createReservation(
       customerName:  cust?.fullName ?? user?.fullName ?? 'Khách',

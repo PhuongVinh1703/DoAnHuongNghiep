@@ -7,6 +7,8 @@ import 'package:doanquanlyquananai_mobileapp/services/menu_provider.dart';
 import 'package:doanquanlyquananai_mobileapp/models/menu/menu_item.dart';
 import 'package:doanquanlyquananai_mobileapp/models/menu/menu_category.dart';
 import 'package:doanquanlyquananai_mobileapp/l10n/app_localizations.dart';
+import 'package:doanquanlyquananai_mobileapp/services/auth_service.dart';
+import 'package:doanquanlyquananai_mobileapp/config/constants.dart';
 
 class MenuScreen extends StatefulWidget {
   final int initialCategoryId;
@@ -199,40 +201,48 @@ class _MenuItemCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        formattedPrice,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text("Món ${item.name} — Vui lòng chọn bàn ở tab Bàn để thêm vào đơn phục vụ."),
-                              duration: const Duration(seconds: 2),
+                  Builder(
+                    builder: (context) {
+                      final user = context.watch<AuthService>().currentUser;
+                      final isStaffOrManager = user != null && user.role != AppConstants.roleCustomer;
+
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            formattedPrice,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
                             ),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary,
-                            borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(
-                            Icons.add_rounded,
-                            size: 18,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
+                          if (isStaffOrManager)
+                            GestureDetector(
+                              onTap: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text("Món ${item.name} — Vui lòng chọn bàn ở tab Bàn để thêm vào đơn phục vụ."),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.add_rounded,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),

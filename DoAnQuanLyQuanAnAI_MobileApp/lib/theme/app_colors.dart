@@ -108,10 +108,37 @@ class AppColors {
   static const Color chipPending = Color(0xFFF9A825);
   static const Color chipDraft = Color(0xFF455A64);
 
-  // ── Table Status Colors ────────────────────────────────
+  // ── Table Status Colors (Enterprise F&B Multi-State) ────
   static const Color tableAvailable = Color(0xFFE8F5E9);
+  static const Color tableAvailableFg = Color(0xFF2E7D32);
+  static const Color tableAvailableBorder = Color(0xFFA5D6A7);
+
   static const Color tableOccupied = Color(0xFFFFF3E0);
+  static const Color tableOccupiedFg = Color(0xFFE65100);
+  static const Color tableOccupiedBorder = Color(0xFFFFCC80);
+
   static const Color tableReserved = Color(0xFFE3F2FD);
+  static const Color tableReservedFg = Color(0xFF1565C0);
+  static const Color tableReservedBorder = Color(0xFF90CAF9);
+
+  static const Color tableOverdue = Color(0xFFFFEBEE);
+  static const Color tableOverdueFg = Color(0xFFC62828);
+  static const Color tableOverdueBorder = Color(0xFFEF9A9A);
+
+  static const Color tableCleaning = Color(0xFFF3E5F5);
+  static const Color tableCleaningFg = Color(0xFF7B1FA2);
+  static const Color tableCleaningBorder = Color(0xFFCE93D8);
+
+  // ── KDS (Kitchen Display System) Status Colors ─────────
+  static const Color kdsNormal = Color(0xFF2E7D32);     // Dưới 10 phút: bình thường
+  static const Color kdsWarning = Color(0xFFF57C00);    // 10 - 20 phút: cần chú ý
+  static const Color kdsCritical = Color(0xFFD32F2F);   // Trên 20 phút: trễ đơn khẩn cấp
+  static const Color kdsReady = Color(0xFF00897B);      // Bếp đã hoàn thành, chờ bưng
+
+  // ── POS Terminal & Billing Helpers ────────────────────
+  static const Color quickCashBg = Color(0xFFF5F7FA);
+  static const Color quickCashBorder = Color(0xFFCFD8DC);
+  static const Color splitBillBadge = Color(0xFF5C6BC0);
 
   // ── AI Gradient ────────────────────────────────────────
   static const LinearGradient aiGradient = LinearGradient(
@@ -128,13 +155,51 @@ class AppColors {
   static Color tableStatusColor(int status) {
     switch (status) {
       case 0:
-        return chipPaid;
+        return tableAvailableFg;
       case 1:
-        return error;
+        return tableOccupiedFg;
       case 2:
-        return warning;
+        return tableReservedFg;
+      case 3:
+        return tableOverdueFg;
+      case 4:
+        return tableCleaningFg;
       default:
         return textSecondary;
+    }
+  }
+
+  static Color tableStatusBg(int status) {
+    switch (status) {
+      case 0:
+        return tableAvailable;
+      case 1:
+        return tableOccupied;
+      case 2:
+        return tableReserved;
+      case 3:
+        return tableOverdue;
+      case 4:
+        return tableCleaning;
+      default:
+        return surfaceContainer;
+    }
+  }
+
+  static Color tableStatusBorder(int status) {
+    switch (status) {
+      case 0:
+        return tableAvailableBorder;
+      case 1:
+        return tableOccupiedBorder;
+      case 2:
+        return tableReservedBorder;
+      case 3:
+        return tableOverdueBorder;
+      case 4:
+        return tableCleaningBorder;
+      default:
+        return outlineVariant;
     }
   }
 

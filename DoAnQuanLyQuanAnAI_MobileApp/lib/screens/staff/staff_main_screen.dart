@@ -5,6 +5,7 @@ import 'package:doanquanlyquananai_mobileapp/config/constants.dart';
 import 'package:doanquanlyquananai_mobileapp/services/auth_service.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/staff/staff_tables_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/staff/staff_order_screen.dart';
+import 'package:doanquanlyquananai_mobileapp/screens/staff/kds_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/menu_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/profile_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/widgets/app_bottom_nav.dart';
@@ -284,6 +285,15 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
           ],
         ),
         actions: [
+          // KDS (Bếp) shortcut
+          IconButton(
+            icon: const Icon(Icons.restaurant_menu_rounded),
+            tooltip: 'Màn hình bếp (KDS)',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const KdsScreen()),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.language_rounded),
             onPressed: () => context.read<LocaleService>().toggleLocale(),

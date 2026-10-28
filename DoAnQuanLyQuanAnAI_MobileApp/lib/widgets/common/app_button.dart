@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:doanquanlyquananai_mobileapp/core/constants/app_colors.dart';
+import 'package:doanquanlyquananai_mobileapp/theme/app_haptics.dart';
 
 class AppButton extends StatelessWidget {
   final String label;
@@ -56,12 +57,17 @@ class AppButton extends StatelessWidget {
             ],
           );
 
+    void handlePress() {
+      AppHaptics.light();
+      onPressed?.call();
+    }
+
     if (isOutlined) {
       return SizedBox(
         width: width,
         height: height,
         child: OutlinedButton(
-          onPressed: isLoading ? null : onPressed,
+          onPressed: (isLoading || onPressed == null) ? null : handlePress,
           style: OutlinedButton.styleFrom(
             side: BorderSide(color: effectiveColor, width: 1.5),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -76,7 +82,7 @@ class AppButton extends StatelessWidget {
       width: width,
       height: height,
       child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
+        onPressed: (isLoading || onPressed == null) ? null : handlePress,
         style: ElevatedButton.styleFrom(
           backgroundColor: effectiveColor,
           disabledBackgroundColor: effectiveColor.withValues(alpha: 0.5),
