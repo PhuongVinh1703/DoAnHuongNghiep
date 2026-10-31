@@ -274,9 +274,165 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             return OrderItemTile(item: cartItem, isEditable: false);
           },
         ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _showPreCheckoutBillDialog,
+            icon: const Icon(Icons.receipt_outlined, size: 18),
+            label: const Text('Xem Phiếu Tạm Tính (Bill kiểm món)'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ),
       ],
     ),
   );
+
+  void _showPreCheckoutBillDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Center(
+                    child: Text(
+                      'TIỆM MÌ CAY SƠN BỘ HẢI',
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Center(
+                    child: Text(
+                      'PHIẾU KIỂM MÓN / TẠM TÍNH',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        letterSpacing: 1.1,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Bàn: ${widget.order.tableName}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text(
+                        'Giờ vào: ${widget.order.openedAt.hour.toString().padLeft(2, '0')}:${widget.order.openedAt.minute.toString().padLeft(2, '0')}',
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                  const Divider(thickness: 1.5, height: 20),
+                  const Row(
+                    children: [
+                      Expanded(flex: 4, child: Text('Món', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                      Expanded(flex: 1, child: Text('SL', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                      Expanded(flex: 2, child: Text('Đơn giá', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                      Expanded(flex: 3, child: Text('T.Tiền', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ...widget.order.items.map((item) {
+                    final itemTotal = item.unitPrice * item.quantity;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 4,
+                                child: Text(item.itemName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                              ),
+                              Expanded(
+                                flex: 1,
+                                child: Text('${item.quantity}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Text(MoneyFormatter.format(item.unitPrice), textAlign: TextAlign.right, style: const TextStyle(fontSize: 11)),
+                              ),
+                              Expanded(
+                                flex: 3,
+                                child: Text(MoneyFormatter.format(itemTotal), textAlign: TextAlign.right, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                              ),
+                            ],
+                          ),
+                          if (item.note != null && item.note!.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4, top: 2),
+                              child: Text(
+                                '• ${item.note}',
+                                style: const TextStyle(fontSize: 10, color: Colors.grey, fontStyle: FontStyle.italic),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const Divider(thickness: 1, height: 20),
+                  _billRow('Tạm tính:', MoneyFormatter.format(_subtotal)),
+                  if (_discount > 0)
+                    _billRow('Giảm giá:', '-${MoneyFormatter.format(_discount)}', color: AppColors.error),
+                  _billRow('VAT (8%):', MoneyFormatter.format(_vatAmount)),
+                  const Divider(thickness: 1.5, height: 16),
+                  _billRow('TỔNG CỘNG:', MoneyFormatter.format(_total), isBold: true, fontSize: 16, color: AppColors.primary),
+                  const SizedBox(height: 16),
+                  const Center(
+                    child: Text(
+                      'Phiếu tạm tính dùng để đối chiếu món trước khi thanh toán.\nCảm ơn quý khách đã ghé thăm!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 10, color: Colors.grey, fontStyle: FontStyle.italic),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('Đóng'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _billRow(String label, String value, {bool isBold = false, double fontSize = 13, Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(fontSize: fontSize, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+          Text(value, style: TextStyle(fontSize: fontSize, fontWeight: isBold ? FontWeight.bold : FontWeight.w600, color: color)),
+        ],
+      ),
+    );
+  }
 
   Widget _customerCard() => _card(
     child: Column(

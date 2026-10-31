@@ -4,6 +4,8 @@ class Role {
   static const int staff    = 1;
   static const int manager  = 2;
   static const int customer = 3;
+  static const int cashier  = 4; // Nhân viên Thu ngân tại quầy
+  static const int kitchen  = 5; // Nhân viên Bếp (KDS)
 }
 
 // Table Status

@@ -12,6 +12,7 @@ class OrderModel {
   final String? note;
   final double subtotal;
   final List<OrderItem> items;
+  final int? branchId;
 
   OrderModel({
     required this.orderId,
@@ -25,6 +26,7 @@ class OrderModel {
     this.note,
     required this.subtotal,
     required this.items,
+    this.branchId,
   });
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
@@ -54,6 +56,8 @@ class OrderModel {
       note:      json['note'] ?? json['Note'],
       subtotal:  (json['subtotal'] ?? json['Subtotal'] ?? computedSubtotal).toDouble(),
       items:     parsedItems,
+      branchId:  json['branchId']  ?? json['BranchId']  ?? 
+                 (json['DiningTables'] as Map?)?['BranchId'],
     );
   }
 
@@ -70,6 +74,7 @@ class OrderModel {
       'note': note,
       'subtotal': subtotal,
       'items': items.map((i) => i.toJson()).toList(),
+      'branchId': branchId,
     };
   }
 }

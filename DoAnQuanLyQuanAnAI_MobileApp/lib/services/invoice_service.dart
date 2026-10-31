@@ -77,15 +77,19 @@ class InvoiceService {
       // 1. Lấy thông tin order mở trước để làm dữ liệu đầu vào cho AI
       DateTime openedAt = DateTime.now();
       int numItemsOrdered = 0;
+      String? orderNote;
+      int? orderAccountId;
       try {
         final orderInfo = await _db
             .from('Orders')
-            .select('OpenedAt, OrderItems(Quantity, IsDeleted)')
+            .select('OpenedAt, Note, AccountId, OrderItems(Quantity, IsDeleted)')
             .eq('OrderId', orderId)
             .eq('Status', 0)
             .maybeSingle();
 
         if (orderInfo != null) {
+          orderNote = orderInfo['Note']?.toString();
+          orderAccountId = orderInfo['AccountId'] as int?;
           openedAt = DateTime.parse(
             orderInfo['OpenedAt'] ?? DateTime.now().toIso8601String(),
           );
@@ -98,6 +102,13 @@ class InvoiceService {
               );
         }
       } catch (_) {}
+
+      // Đồng bộ AiTracker từ Orders.Note với tracker hiện tại của quầy
+      final effectiveTracker = AiTracker.mergeFromOrderNote(
+        orderNote,
+        tracker,
+        openedAt: openedAt,
+      );
 
       // 2. Thực thi RPC checkout trong 1 transaction ACID
       final res = await _db.rpc(
@@ -149,15 +160,16 @@ class InvoiceService {
             .inSeconds
             .toDouble();
 
-        // Tính toán cancel_rate: dùng giá trị từ tracker (nếu có),
-        // ngược lại truy vấn từ cơ sở dữ liệu dựa trên AccountId.
-        double cancelRate = tracker.cancelRate;
+        // Tính toán cancel_rate: dùng giá trị từ effectiveTracker (nếu có),
+        // ngược lại truy vấn từ cơ sở dữ liệu dựa trên AccountId tạo đơn hoặc thanh toán.
+        final targetStaffId = orderAccountId ?? accountId;
+        double cancelRate = effectiveTracker.cancelRate;
         if (cancelRate == 0.0) {
           try {
             final ordersList = await _db
                 .from('Orders')
                 .select('Status')
-                .eq('AccountId', accountId);
+                .eq('AccountId', targetStaffId);
             if (ordersList.isNotEmpty) {
               final cancelledCount =
                   ordersList.where((o) => o['Status'] == 2).length;
@@ -167,15 +179,16 @@ class InvoiceService {
         }
 
         final payload = {
-          'staff_id': accountId.toString(),
+          'staff_id': targetStaffId.toString(),
           'session_duration': sessionDuration,
           'num_items_ordered': numItemsOrdered,
           'transaction_hour': DateTime.now().hour.toDouble(),
-          'checkout_time_sec': tracker.checkoutTimeSec,
-          'void_count': tracker.voidCount,
+          'checkout_time_sec': effectiveTracker.checkoutTimeSec,
+          'void_count': effectiveTracker.voidCount,
           'discount_percent': discountPercent,
-          'add_remove_ratio': tracker.addRemoveRatio,
-          'items_removed_after_confirm': tracker.itemsRemovedAfterConfirm,
+          'add_remove_ratio': effectiveTracker.addRemoveRatio,
+          'items_removed_after_confirm':
+              effectiveTracker.itemsRemovedAfterConfirm,
           'cancel_rate': cancelRate,
         };
 
@@ -186,8 +199,17 @@ class InvoiceService {
         String alertMessage = 'AI phát hiện giao dịch bất thường';
 
         // --- Kịch bản Luật thép ở Client (đảm bảo không bị sót lỗi nghiêm trọng) ---
+        // 0. Hủy món sau khi đã gửi bếp / xác nhận (CancelAfterPayment)
+        if (effectiveTracker.itemsRemovedAfterConfirm > 0) {
+          isAnomaly = true;
+          anomalyScore = 0.98;
+          riskLevel = 'HIGH';
+          alertType = 0; // CancelAfterPayment
+          alertMessage =
+              '[Hủy món sau xác nhận] Phát hiện xóa ${effectiveTracker.itemsRemovedAfterConfirm} món sau khi gửi bếp/xác nhận';
+        }
         // 1. Thanh toán siêu tốc (Session duration < 120 giây)
-        if (sessionDuration > 0 && sessionDuration < 120.0) {
+        else if (sessionDuration > 0 && sessionDuration < 120.0) {
           isAnomaly = true;
           anomalyScore = 0.95;
           riskLevel = 'HIGH';
@@ -214,22 +236,22 @@ class InvoiceService {
               '[Giao dịch ngoài giờ] Thực hiện lúc ${DateTime.now().hour}h';
         }
         // 4. Hủy bill liên tục (Void count >= 5 và tỷ lệ hủy đơn >= 50%)
-        else if (tracker.voidCount >= 5 && cancelRate >= 0.50) {
+        else if (effectiveTracker.voidCount >= 5 && cancelRate >= 0.50) {
           isAnomaly = true;
           anomalyScore = 0.90;
           riskLevel = 'HIGH';
           alertType = 4; // FrequentCancellation
           alertMessage =
-              '[Hủy bill liên tục] Tần suất hủy món cao (${tracker.voidCount} lần) và tỷ lệ hủy đơn của NV là ${(cancelRate * 100).toInt()}%';
+              '[Hủy bill liên tục] Tần suất hủy món cao (${effectiveTracker.voidCount} lần) và tỷ lệ hủy đơn của NV là ${(cancelRate * 100).toInt()}%';
         }
         // 5. Thêm/xóa món bất thường (Tỷ lệ add_remove_ratio >= 70%)
-        else if (tracker.addRemoveRatio >= 0.70) {
+        else if (effectiveTracker.addRemoveRatio >= 0.70) {
           isAnomaly = true;
           anomalyScore = 0.85;
           riskLevel = 'MEDIUM';
           alertType = 6; // AddRemoveAnomaly
           alertMessage =
-              '[Thêm/xóa món bất thường] Tỷ lệ chỉnh sửa giỏ hàng cao (${(tracker.addRemoveRatio * 100).toInt()}%)';
+              '[Thêm/xóa món bất thường] Tỷ lệ chỉnh sửa giỏ hàng cao (${(effectiveTracker.addRemoveRatio * 100).toInt()}%)';
         }
 
         // Nếu luật thép chưa kích hoạt, gọi AI Microservice để phân tích sâu hơn

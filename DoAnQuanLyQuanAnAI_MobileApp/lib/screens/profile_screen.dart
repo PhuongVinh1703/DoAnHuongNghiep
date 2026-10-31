@@ -25,9 +25,11 @@ class ProfileScreen extends StatelessWidget {
     final user = authService.currentUser;
     final roleName = switch (user?.role) {
       0 => l10n.translate('owner'),
-      1 => l10n.translate('staff'),
+      1 => '🛎️ Nhân viên Phục vụ',
       2 => l10n.translate('manager'),
       3 => l10n.translate('membership'),
+      4 => '💳 Nhân viên Thu ngân',
+      5 => '👨🍳 Nhân viên Bếp (KDS)',
       _ => l10n.translate('guest'),
     };
 

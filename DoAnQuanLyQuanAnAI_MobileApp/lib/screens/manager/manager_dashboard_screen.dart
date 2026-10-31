@@ -17,6 +17,7 @@ import 'package:doanquanlyquananai_mobileapp/screens/manager/ai_alerts_screen.da
 import 'package:doanquanlyquananai_mobileapp/screens/manager/discount_management_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/manager/reservation_manage_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/staff/staff_main_screen.dart';
+import 'package:doanquanlyquananai_mobileapp/screens/staff/cashier_main_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/staff/kds_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/services/booking_notification_provider.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -1691,10 +1692,17 @@ class _NavGrid extends StatelessWidget {
     final items = [
       {
         'icon': Icons.layers_rounded,
-        'label': l10n.translate('floor_plan'),
+        'label': 'Phục vụ bàn',
         'route': '/staff_main',
         'color': const Color(0xFF1565C0),
         'bg': const Color(0xFFE3F2FD),
+      },
+      {
+        'icon': Icons.point_of_sale_rounded,
+        'label': 'Quầy Thu ngân',
+        'route': '/cashier',
+        'color': const Color(0xFFF57F17),
+        'bg': const Color(0xFFFFFDE7),
       },
       {
         'icon': Icons.restaurant_menu_rounded,
@@ -1813,6 +1821,11 @@ class _NavGrid extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const StaffMainScreen()),
+                ).then((_) => loadDashboardData());
+              } else if (route == '/cashier') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CashierMainScreen()),
                 ).then((_) => loadDashboardData());
               }
             },

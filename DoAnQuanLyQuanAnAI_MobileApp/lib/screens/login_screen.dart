@@ -8,6 +8,8 @@ import 'package:doanquanlyquananai_mobileapp/services/auth_service.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/customer/customer_home_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/register_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/staff/staff_main_screen.dart';
+import 'package:doanquanlyquananai_mobileapp/screens/staff/cashier_main_screen.dart';
+import 'package:doanquanlyquananai_mobileapp/screens/staff/kds_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/manager/manager_dashboard_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/forgot_password_screen.dart';
 
@@ -86,6 +88,12 @@ class _LoginScreenState extends State<LoginScreen>
         break;
       case AppConstants.roleStaff:
         targetScreen = const StaffMainScreen();
+        break;
+      case AppConstants.roleCashier:
+        targetScreen = const CashierMainScreen();
+        break;
+      case AppConstants.roleKitchen:
+        targetScreen = const KdsScreen();
         break;
       case AppConstants.roleCustomer:
         targetScreen = const CustomerHomeScreen();

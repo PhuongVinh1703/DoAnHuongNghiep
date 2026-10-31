@@ -16,6 +16,7 @@ class OrderProvider with ChangeNotifier {
   int _voidCount = 0;
   int _itemsRemovedAfterConfirm = 0;
   bool _confirmClicked = false;
+  DateTime? _confirmTime;
   DateTime? _tableOpenedAt;
 
   OrderProvider();
@@ -32,6 +33,7 @@ class OrderProvider with ChangeNotifier {
     }
     _itemsRemovedAfterConfirm = 0;
     _confirmClicked = false;
+    _confirmTime = null;
     _tableOpenedAt = null;
   }
 
@@ -42,7 +44,25 @@ class OrderProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Lấy order hiện tại của bàn (Status = 0)
+  /// Gán đơn hàng hiện tại (dùng khi Thu ngân bấm "Tính tiền" trực tiếp từ danh sách)
+  void setCurrentOrder(OrderModel order) {
+    _currentOrder = order;
+    _tableOpenedAt = order.openedAt;
+    final merged = AiTracker.mergeFromOrderNote(
+      order.note,
+      getAiTracker(),
+      openedAt: order.openedAt,
+    );
+    _voidCount = merged.voidCount;
+    _addCount = merged.totalAdded;
+    _removeCount = merged.totalRemoved;
+    _itemsRemovedAfterConfirm = merged.itemsRemovedAfterConfirm;
+    _confirmClicked = merged.hasConfirmed;
+    _confirmTime = merged.confirmTime;
+    notifyListeners();
+  }
+
+  /// Lấy order hiện tại của bàn (Status = 0)
   Future<void> fetchOpenOrderForTable(int tableId) async {
     _isLoading = true;
     _error = '';
@@ -56,6 +76,17 @@ class OrderProvider with ChangeNotifier {
         _currentOrder = result.data;
         if (_currentOrder != null) {
           _tableOpenedAt ??= _currentOrder!.openedAt;
+          final merged = AiTracker.mergeFromOrderNote(
+            _currentOrder!.note,
+            getAiTracker(),
+            openedAt: _currentOrder!.openedAt,
+          );
+          _voidCount = merged.voidCount;
+          _addCount = merged.totalAdded;
+          _removeCount = merged.totalRemoved;
+          _itemsRemovedAfterConfirm = merged.itemsRemovedAfterConfirm;
+          _confirmClicked = merged.hasConfirmed;
+          _confirmTime = merged.confirmTime;
         } else {
           _resetCounters(keepVoidCount: true);
         }
@@ -70,13 +101,14 @@ class OrderProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Mở bàn / Tạo Order mới
-  Future<bool> createOrder(int tableId, int accountId) async {
+  /// Mở bàn / Tạo Order mới
+  Future<bool> createOrder(int tableId, int accountId, {String? note}) async {
     try {
       final orderService = OrderService();
       final result = await orderService.createOrder(
         tableId: tableId,
         accountId: accountId,
+        note: note,
       );
 
       if (result.isSuccess && result.data != null) {
@@ -97,8 +129,31 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
-  // Thêm món
-  Future<bool> addItem(int itemId, int quantity) async {
+  /// Đồng bộ chỉ số AI Tracker và trạng thái vào Orders.Note
+  Future<void> _syncTrackerToOrderNote({
+    bool? requestPayment,
+    bool? kitchenReady,
+  }) async {
+    if (_currentOrder == null) return;
+    try {
+      final newNote = AiTracker.buildUpdatedNote(
+        currentNote: _currentOrder!.note,
+        requestPayment: requestPayment,
+        kitchenReady: kitchenReady,
+        tracker: getAiTracker(),
+      );
+      final res = await OrderService().updateOrderNote(
+        _currentOrder!.orderId,
+        newNote,
+      );
+      if (res.isSuccess && res.data != null) {
+        _currentOrder = res.data;
+      }
+    } catch (_) {}
+  }
+
+  /// Thêm món
+  Future<bool> addItem(int itemId, int quantity, {String? note}) async {
     if (_currentOrder == null) return false;
     try {
       final orderService = OrderService();
@@ -106,11 +161,13 @@ class OrderProvider with ChangeNotifier {
         _currentOrder!.orderId,
         itemId,
         quantity,
+        note: note,
       );
 
       if (result.isSuccess && result.data != null) {
         _addCount += quantity;
         _currentOrder = result.data;
+        await _syncTrackerToOrderNote();
         notifyListeners();
         return true;
       } else {
@@ -125,7 +182,7 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
-  // Cập nhật số lượng
+  /// Cập nhật số lượng món
   Future<bool> updateItemQty(int orderItemId, int quantity) async {
     if (_currentOrder == null) return false;
 
@@ -154,6 +211,8 @@ class OrderProvider with ChangeNotifier {
         // Tự động hủy order & giải phóng bàn nếu không còn món nào trong giỏ
         if (_currentOrder != null && _currentOrder!.items.isEmpty) {
           await cancelOrder();
+        } else {
+          await _syncTrackerToOrderNote();
         }
 
         notifyListeners();
@@ -170,7 +229,7 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
-  // Xóa món
+  /// Xóa món
   Future<bool> removeItem(int orderItemId) async {
     if (_currentOrder == null) return false;
 
@@ -192,6 +251,8 @@ class OrderProvider with ChangeNotifier {
         // Tự động hủy order & giải phóng bàn nếu không còn món nào trong giỏ
         if (_currentOrder != null && _currentOrder!.items.isEmpty) {
           await cancelOrder();
+        } else {
+          await _syncTrackerToOrderNote();
         }
 
         notifyListeners();
@@ -208,7 +269,7 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
-  // Hủy Order
+  /// Hủy Order
   Future<bool> cancelOrder() async {
     if (_currentOrder == null) return false;
 
@@ -234,15 +295,59 @@ class OrderProvider with ChangeNotifier {
     }
   }
 
-  // Đánh dấu người dùng đã bấm Checkout
+  /// Đánh dấu người dùng đã bấm xác nhận gửi bếp / checkout
   void markConfirmClicked() {
     _confirmClicked = true;
+    _confirmTime ??= DateTime.now();
     notifyListeners();
+  }
+
+  /// Nhân viên Phục vụ bấm báo Quầy Thu ngân tính tiền bàn này
+  Future<bool> requestPaymentForCurrentOrder() async {
+    if (_currentOrder == null) return false;
+    markConfirmClicked();
+    try {
+      final newNote = AiTracker.buildUpdatedNote(
+        currentNote: _currentOrder!.note,
+        requestPayment: true,
+        tracker: getAiTracker(),
+      );
+      final res = await OrderService().updateOrderNote(
+        _currentOrder!.orderId,
+        newNote,
+      );
+      if (res.isSuccess && res.data != null) {
+        _currentOrder = res.data;
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      _error = ErrorHandler.formatError(e);
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Nhân viên Phục vụ bấm Xác nhận & Gửi Bếp
+  Future<bool> sendToKitchen() async {
+    if (_currentOrder == null) return false;
+    markConfirmClicked();
+    try {
+      await _syncTrackerToOrderNote();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = ErrorHandler.formatError(e);
+      notifyListeners();
+      return false;
+    }
   }
 
   AiTracker getAiTracker() {
     return AiTracker.fromRaw(
       startTime: _tableOpenedAt,
+      confirmTime: _confirmTime,
       voidCount: _voidCount,
       totalAdded: _addCount,
       totalRemoved: _removeCount,
@@ -251,7 +356,7 @@ class OrderProvider with ChangeNotifier {
     );
   }
 
-  // Thanh toán
+  /// Thanh toán hóa đơn tại quầy
   Future<Map<String, dynamic>?> checkout({
     required int accountId,
     int? customerId,

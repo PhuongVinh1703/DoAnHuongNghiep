@@ -106,6 +106,8 @@ class AppLocalizations {
     'owner': {'vi': 'Chủ sở hữu', 'en': 'Owner'},
     'manager': {'vi': 'Quản lý', 'en': 'Manager'},
     'staff': {'vi': 'Nhân viên', 'en': 'Staff'},
+    'cashier': {'vi': 'Thu ngân', 'en': 'Cashier'},
+    'kitchen': {'vi': 'Nhân viên bếp', 'en': 'Kitchen Staff'},
     'guest': {'vi': 'Khách', 'en': 'Guest'},
 
     // ── Manager Dashboard ───────────────────────────────

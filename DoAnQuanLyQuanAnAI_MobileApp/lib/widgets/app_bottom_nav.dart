@@ -4,25 +4,48 @@ import 'package:doanquanlyquananai_mobileapp/l10n/app_localizations.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_theme.dart';
 
+class AppBottomNavItem {
+  final IconData icon;
+  final String label;
+  final int badgeCount;
+
+  const AppBottomNavItem({
+    required this.icon,
+    required this.label,
+    this.badgeCount = 0,
+  });
+}
+
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
+  final List<AppBottomNavItem>? customItems;
 
   const AppBottomNav({
     super.key,
     required this.currentIndex,
     required this.onTap,
+    this.customItems,
   });
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final items = [
-      _NavItem(icon: Icons.grid_view_rounded, label: l10n.translate('tables'), index: 0),
-      _NavItem(icon: Icons.receipt_long_rounded, label: l10n.translate('orders'), index: 1),
-      _NavItem(icon: Icons.restaurant_menu_rounded, label: l10n.translate('menu'), index: 2),
-      _NavItem(icon: Icons.person_rounded, label: l10n.translate('profile'), index: 3),
-    ];
+    final List<AppBottomNavItem> navItems = customItems ??
+        [
+          AppBottomNavItem(
+            icon: Icons.grid_view_rounded,
+            label: l10n.translate('tables'),
+          ),
+          AppBottomNavItem(
+            icon: Icons.restaurant_menu_rounded,
+            label: l10n.translate('menu'),
+          ),
+          AppBottomNavItem(
+            icon: Icons.person_rounded,
+            label: l10n.translate('profile'),
+          ),
+        ];
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -50,10 +73,11 @@ class AppBottomNav extends StatelessWidget {
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: items.map((item) {
-                final isActive = currentIndex == item.index;
-                return _buildNavItem(context, item, isActive);
-              }).toList(),
+              children: List.generate(navItems.length, (index) {
+                final item = navItems[index];
+                final isActive = currentIndex == index;
+                return _buildNavItem(context, item, index, isActive);
+              }),
             ),
           ),
         ),
@@ -61,9 +85,14 @@ class AppBottomNav extends StatelessWidget {
     );
   }
 
-  Widget _buildNavItem(BuildContext context, _NavItem item, bool isActive) {
+  Widget _buildNavItem(
+    BuildContext context,
+    AppBottomNavItem item,
+    int index,
+    bool isActive,
+  ) {
     return GestureDetector(
-      onTap: () => onTap(item.index),
+      onTap: () => onTap(index),
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -75,10 +104,37 @@ class AppBottomNav extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              item.icon,
-              color: isActive ? AppColors.primary : AppColors.onSurfaceVariant,
-              size: 24,
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  item.icon,
+                  color: isActive ? AppColors.primary : AppColors.onSurfaceVariant,
+                  size: 24,
+                ),
+                if (item.badgeCount > 0)
+                  Positioned(
+                    right: -6,
+                    top: -4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.error,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                      child: Text(
+                        item.badgeCount > 99 ? '99+' : '${item.badgeCount}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 4),
             Text(
@@ -94,12 +150,4 @@ class AppBottomNav extends StatelessWidget {
       ),
     );
   }
-}
-
-class _NavItem {
-  final IconData icon;
-  final String label;
-  final int index;
-
-  _NavItem({required this.icon, required this.label, required this.index});
 }

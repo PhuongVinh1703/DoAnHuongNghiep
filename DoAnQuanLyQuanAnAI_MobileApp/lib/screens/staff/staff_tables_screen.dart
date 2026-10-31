@@ -29,13 +29,8 @@ class StaffTablesScreen extends StatefulWidget {
 class _StaffTablesScreenState extends State<StaffTablesScreen>
     with SingleTickerProviderStateMixin {
   _TableFilter _selectedFilter = _TableFilter.all;
-  bool _isOwner = false;
   List<Branch> _branches = [];
   int? _selectedBranchId;
-
-  // Khu vực (zone) — lấy từ tiền tố tên bàn hoặc mặc định "Tất cả"
-  static const List<String> _zoneLabels = ['Tất cả', 'Tầng 1', 'Tầng 2', 'Sân vườn', 'VIP'];
-  int _selectedZoneIndex = 0;
 
   // Timer tích để cập nhật đồng hồ thời gian ngồi
   Timer? _clockTimer;
@@ -59,18 +54,21 @@ class _StaffTablesScreenState extends State<StaffTablesScreen>
   Future<void> _initData() async {
     final auth = context.read<AuthService>();
     final user = auth.currentUser;
-    _isOwner = (user?.role == AppConstants.roleOwner);
 
-    if (_isOwner) {
-      final res = await BranchService().getBranches();
-      if (res.isSuccess && res.data != null && res.data!.isNotEmpty) {
+    // Luôn tải danh sách chi nhánh để hiển thị cho mọi vai trò
+    final res = await BranchService().getBranches();
+    if (res.isSuccess && res.data != null && res.data!.isNotEmpty) {
+      if (mounted) {
         setState(() {
           _branches = res.data!;
-          _selectedBranchId = _branches.first.branchId;
         });
       }
-    } else {
-      _selectedBranchId = user?.branchId;
+    }
+
+    if (user?.branchId != null) {
+      _selectedBranchId = user!.branchId;
+    } else if (_branches.isNotEmpty) {
+      _selectedBranchId = _branches.first.branchId;
     }
 
     if (mounted) {
@@ -78,97 +76,85 @@ class _StaffTablesScreenState extends State<StaffTablesScreen>
     }
   }
 
-  // ── Zone matching: dựa vào tiền tố tên bàn ──
-  bool _tableMatchesZone(DiningTable t) {
-    if (_selectedZoneIndex == 0) return true;
-    final name = t.tableName.toLowerCase();
-    switch (_selectedZoneIndex) {
-      case 1: return name.contains('t1') || name.contains('tầng 1') || name.contains('tang 1') || name.contains('f1');
-      case 2: return name.contains('t2') || name.contains('tầng 2') || name.contains('tang 2') || name.contains('f2');
-      case 3: return name.contains('sv') || name.contains('sân vườn') || name.contains('san vuon') || name.contains('garden');
-      case 4: return name.contains('vip');
-      default: return true;
-    }
-  }
-
-  // ── Branch filter (chỉ Owner) ──────────────────
+  // ── Branch filter (Hiển thị cho tất cả các role, phân quyền chuyển chi nhánh) ──────────────────
   Widget _buildBranchFilter() {
+    final user = context.read<AuthService>().currentUser;
+    final canSwitch = user?.role == AppConstants.roleOwner ||
+        user?.role == AppConstants.roleManager ||
+        user?.role == AppConstants.roleCashier ||
+        user?.branchId == null;
+
+    final branchName = _branches
+        .firstWhere(
+          (b) => b.branchId == _selectedBranchId,
+          orElse: () => _branches.isNotEmpty
+              ? _branches.first
+              : Branch(branchId: 1, name: 'Chi nhánh 1', address: '', phone: '', isActive: true),
+        )
+        .name;
+
     return Container(
       margin: const EdgeInsets.fromLTRB(AppTheme.marginMobile, 0, AppTheme.marginMobile, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: AppTheme.cardDecoration(
         color: AppColors.surfaceContainerLowest,
         radius: AppTheme.radiusMd,
       ),
       child: Row(
         children: [
-          const Icon(Icons.store_rounded, color: AppColors.primary, size: 18),
+          const Icon(Icons.store_rounded, color: AppColors.primary, size: 20),
+          const SizedBox(width: 8),
+          const Text(
+            'Chi nhánh:',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          ),
           const SizedBox(width: 8),
           Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<int?>(
-                value: _selectedBranchId,
-                isExpanded: true,
-                hint: const Text('Chọn chi nhánh'),
-                items: _branches
-                    .map((b) => DropdownMenuItem<int?>(
-                          value: b.branchId,
-                          child: Text(b.name, style: const TextStyle(fontSize: 14)),
-                        ))
-                    .toList(),
-                onChanged: (val) {
-                  AppHaptics.selection();
-                  setState(() => _selectedBranchId = val);
-                  context.read<TableProvider>().loadTables(branchId: val);
-                },
-              ),
-            ),
+            child: canSwitch
+                ? DropdownButtonHideUnderline(
+                    child: DropdownButton<int?>(
+                      value: _selectedBranchId,
+                      isExpanded: true,
+                      hint: const Text('Chọn chi nhánh'),
+                      items: [
+                        ..._branches.map((b) => DropdownMenuItem<int?>(
+                              value: b.branchId,
+                              child: Text(
+                                b.name,
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            )),
+                        const DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text(
+                            'Tất cả chi nhánh',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (val) {
+                        AppHaptics.selection();
+                        setState(() => _selectedBranchId = val);
+                        context.read<TableProvider>().loadTables(branchId: val);
+                      },
+                    ),
+                  )
+                : Text(
+                    branchName,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
           ),
         ],
-      ),
-    );
-  }
-
-  // ── Zone Tabs ──────────────────────────────────
-  Widget _buildZoneTabs() {
-    return SizedBox(
-      height: 36,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppTheme.marginMobile),
-        itemCount: _zoneLabels.length,
-        itemBuilder: (context, index) {
-          final isSelected = _selectedZoneIndex == index;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: GestureDetector(
-              onTap: () {
-                AppHaptics.selection();
-                setState(() => _selectedZoneIndex = index);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isSelected ? AppColors.primary : AppColors.surfaceContainerLowest,
-                  borderRadius: BorderRadius.circular(AppTheme.radiusFull),
-                  border: Border.all(
-                    color: isSelected ? AppColors.primary : AppColors.outlineVariant,
-                  ),
-                  boxShadow: isSelected ? AppTheme.shadowLevel2 : [],
-                ),
-                child: Text(
-                  _zoneLabels[index],
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: isSelected ? Colors.white : AppColors.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
       ),
     );
   }
@@ -231,19 +217,17 @@ class _StaffTablesScreenState extends State<StaffTablesScreen>
 
         final all = provider.tables;
 
-        // ── Filter by zone + status ──
+        // ── Filter by status ──
         List<DiningTable> displayTables = all.where((t) {
-          final zoneMatch = _tableMatchesZone(t);
-          final statusMatch = switch (_selectedFilter) {
+          return switch (_selectedFilter) {
             _TableFilter.all => true,
             _TableFilter.available => t.status == 0,
             _TableFilter.occupied => t.status == 1,
             _TableFilter.reserved => t.status == 2,
           };
-          return zoneMatch && statusMatch;
         }).toList();
 
-        // ── Counts (toàn bộ bàn, không lọc zone) ──
+        // ── Counts ──
         final availableCount = all.where((t) => t.status == 0).length;
         final occupiedCount  = all.where((t) => t.status == 1).length;
         final reservedCount  = all.where((t) => t.status == 2).length;
@@ -253,11 +237,9 @@ class _StaffTablesScreenState extends State<StaffTablesScreen>
           children: [
             const SizedBox(height: 8),
 
-            // ─── Branch Filter (Owner only) ──────────────────
-            if (_isOwner) ...[
-              _buildBranchFilter(),
-              const SizedBox(height: 8),
-            ],
+            // ─── Branch Filter & Indicator ──────────────────
+            _buildBranchFilter(),
+            const SizedBox(height: 8),
 
             // ─── Header Stats ────────────────────────────────
             Padding(
@@ -286,10 +268,6 @@ class _StaffTablesScreenState extends State<StaffTablesScreen>
             ),
 
             const SizedBox(height: 12),
-
-            // ─── Zone Tabs ───────────────────────────────────
-            _buildZoneTabs(),
-            const SizedBox(height: 10),
 
             // ─── Status Filter Chips ─────────────────────────
             _buildFilterChips(l10n),
@@ -508,12 +486,34 @@ class _SmartTableCard extends StatelessWidget {
 
               const Spacer(),
 
-              // ── Tên bàn ──────────────────────────────────
-              Text(
-                table.tableName,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              // ── Tên bàn + Nhãn chi nhánh nếu xem tất cả ──
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      table.tableName,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (table.branchId != null && branchId == null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withAlpha(25),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'CN ${table.branchId}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                ],
               ),
 
               const SizedBox(height: 4),

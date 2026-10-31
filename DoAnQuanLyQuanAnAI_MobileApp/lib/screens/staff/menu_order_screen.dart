@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:doanquanlyquananai_mobileapp/config/constants.dart';
+import 'package:doanquanlyquananai_mobileapp/services/auth_service.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_theme.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_haptics.dart';
@@ -11,6 +13,7 @@ import 'package:doanquanlyquananai_mobileapp/models/menu/menu_item.dart';
 import 'package:doanquanlyquananai_mobileapp/models/menu/menu_category.dart';
 import 'package:doanquanlyquananai_mobileapp/l10n/app_localizations.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/staff/checkout_screen.dart';
+import 'package:doanquanlyquananai_mobileapp/core/utils/ai_tracker.dart';
 
 class MenuOrderScreen extends StatefulWidget {
   final String tableName;
@@ -65,6 +68,7 @@ class _MenuOrderScreenState extends State<MenuOrderScreen>
     final l10n = AppLocalizations.of(context);
     final orderProvider = context.watch<OrderProvider>();
     final menuProvider  = context.watch<MenuProvider>();
+    final userRole = context.watch<AuthService>().currentUser?.role ?? AppConstants.roleStaff;
 
     final order = orderProvider.currentOrder;
     final itemCount  = order?.items.fold(0, (s, i) => s + i.quantity) ?? 0;
@@ -242,6 +246,8 @@ class _MenuOrderScreenState extends State<MenuOrderScreen>
               },
               order: order,
               orderProvider: orderProvider,
+              userRole: userRole,
+              tableName: widget.tableName,
               onCheckout: () {
                 AppHaptics.heavy();
                 Navigator.push(
@@ -617,6 +623,8 @@ class _FloatingCartBar extends StatelessWidget {
   final dynamic order;
   final OrderProvider orderProvider;
   final VoidCallback onCheckout;
+  final int userRole;
+  final String tableName;
 
   const _FloatingCartBar({
     required this.itemCount,
@@ -627,10 +635,14 @@ class _FloatingCartBar extends StatelessWidget {
     required this.order,
     required this.orderProvider,
     required this.onCheckout,
+    required this.userRole,
+    required this.tableName,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isStaff = userRole == AppConstants.roleStaff;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -708,7 +720,7 @@ class _FloatingCartBar extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 12),
                   // Subtotal info
                   Expanded(
                     child: GestureDetector(
@@ -725,7 +737,7 @@ class _FloatingCartBar extends StatelessWidget {
                           Text(
                             formatCurrency(subtotal),
                             style: const TextStyle(
-                              fontSize: 20,
+                              fontSize: 18,
                               fontWeight: FontWeight.w700,
                               color: AppColors.primary,
                             ),
@@ -734,23 +746,83 @@ class _FloatingCartBar extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // Checkout button
-                  ElevatedButton.icon(
-                    onPressed: onCheckout,
-                    icon: const Icon(Icons.receipt_long_rounded, size: 18),
-                    label: const Text('Thanh toán',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(AppTheme.radiusMd)),
-                      elevation: 0,
+                  // Action buttons
+                  if (isStaff) ...[
+                    // Nút phụ: Báo tính tiền
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        AppHaptics.medium();
+                        await orderProvider.requestPaymentForCurrentOrder();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('💳 Đã báo quầy tính tiền cho $tableName'),
+                              backgroundColor: AppColors.primary,
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                          Navigator.pop(context);
+                        }
+                      },
+                      icon: const Icon(Icons.point_of_sale_rounded, size: 16),
+                      label: const Text('Báo bill',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 6),
+                    // Nút chính: Xác nhận & Gửi Bếp
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        AppHaptics.heavy();
+                        await orderProvider.sendToKitchen();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('✅ Đã gửi thực đơn $tableName xuống Bếp!'),
+                              backgroundColor: AppColors.success,
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                          Navigator.pop(context);
+                        }
+                      },
+                      icon: const Icon(Icons.soup_kitchen_rounded, size: 16),
+                      label: const Text('Gửi Bếp',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.success,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
+                        elevation: 0,
+                      ),
+                    ),
+                  ] else ...[
+                    // Nút chính cho Thu ngân / Quản lý: Thanh toán ngay
+                    ElevatedButton.icon(
+                      onPressed: onCheckout,
+                      icon: const Icon(Icons.receipt_long_rounded, size: 18),
+                      label: const Text('Thanh toán ngay',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppTheme.radiusMd)),
+                        elevation: 0,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -774,11 +846,34 @@ class _FloatingCartBar extends StatelessWidget {
                       child: Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              item.itemName,
-                              style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.itemName,
+                                  style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500),
+                                ),
+                                if (AiTracker.isItemDone(item.note)) ...[
+                                  const SizedBox(height: 2),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFDCFCE7),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      '✅ Bếp đã lên món',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF15803D),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
                           // Decrease
@@ -1017,8 +1112,20 @@ class _ItemModifierSheetState extends State<_ItemModifierSheet> {
                 onPressed: () async {
                   AppHaptics.heavy();
                   Navigator.pop(context);
-                  await widget.orderProvider
-                      .addItem(widget.item.itemId, _qty);
+                  String composedNote = '';
+                  if (_isFood) {
+                    composedNote = _spiceLabels[_spiceLevel];
+                  } else {
+                    composedNote = '${_iceLabels[_iceLevel]}, ${_sugarLabels[_sugarLevel]}';
+                  }
+                  if (_noteCtrl.text.trim().isNotEmpty) {
+                    composedNote += (composedNote.isNotEmpty ? ' - ' : '') + _noteCtrl.text.trim();
+                  }
+                  await widget.orderProvider.addItem(
+                    widget.item.itemId,
+                    _qty,
+                    note: composedNote.isNotEmpty ? composedNote : null,
+                  );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,

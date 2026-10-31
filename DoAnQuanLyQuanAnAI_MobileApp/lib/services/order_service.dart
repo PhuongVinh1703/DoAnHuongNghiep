@@ -10,7 +10,7 @@ class OrderService {
     try {
       final res = await _db
           .from('Orders')
-          .select('*, OrderItems(*, MenuItems(*)), DiningTables(TableName), Accounts(FullName)')
+          .select('*, OrderItems(*, MenuItems(*)), DiningTables(TableName, BranchId), Accounts(FullName)')
           .eq('TableId', tableId)
           .eq('Status', 0)
           .maybeSingle();
@@ -33,7 +33,7 @@ class OrderService {
     try {
       final res = await _db
           .from('Orders')
-          .select('*, OrderItems(*, MenuItems(*)), DiningTables(TableName), Accounts(FullName)')
+          .select('*, OrderItems(*, MenuItems(*)), DiningTables(TableName, BranchId), Accounts(FullName)')
           .eq('OrderId', orderId)
           .single();
 
@@ -51,13 +51,14 @@ class OrderService {
 
   Future<ApiResult<List<OrderModel>>> getOrders({
     int? status, 
+    int? branchId,
     int page = 1, 
     int pageSize = 50
   }) async {
     try {
       var query = _db
           .from('Orders')
-          .select('*, OrderItems(*, MenuItems(*)), DiningTables(TableName), Accounts(FullName)');
+          .select('*, OrderItems(*, MenuItems(*)), DiningTables(TableName, BranchId), Accounts(FullName)');
           
       if (status != null) {
         query = query.eq('Status', status);
@@ -76,7 +77,11 @@ class OrderService {
         return OrderModel.fromJson(e);
       }).toList();
 
-      return ApiResult.success(list);
+      final filtered = branchId != null
+          ? list.where((o) => o.branchId == branchId).toList()
+          : list;
+
+      return ApiResult.success(filtered);
     } catch (e) {
       return ApiResult.failure('Lỗi tải danh sách đơn hàng: $e');
     }
@@ -195,6 +200,32 @@ class OrderService {
       return await getOrderById(orderId);
     } catch (e) {
       return ApiResult.failure('Lỗi xóa món: $e');
+    }
+  }
+
+  /// Cập nhật ghi chú từng món ăn (chứa tag [DONE] khi bếp làm xong món)
+  Future<ApiResult<void>> updateOrderItemNote(int orderItemId, String? note) async {
+    try {
+      await _db
+          .from('OrderItems')
+          .update({'Note': note})
+          .eq('OrderItemId', orderItemId);
+      return ApiResult.success(null);
+    } catch (e) {
+      return ApiResult.failure('Lỗi cập nhật trạng thái món: $e');
+    }
+  }
+
+  /// Cập nhật ghi chú đơn hàng (chứa các tag AI, BILL_REQ, KDS_READY)
+  Future<ApiResult<OrderModel>> updateOrderNote(int orderId, String note) async {
+    try {
+      await _db.from('Orders').update({
+        'Note': note,
+      }).eq('OrderId', orderId);
+
+      return await getOrderById(orderId);
+    } catch (e) {
+      return ApiResult.failure('Lỗi cập nhật ghi chú đơn hàng: $e');
     }
   }
 

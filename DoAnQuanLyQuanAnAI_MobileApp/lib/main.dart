@@ -8,6 +8,7 @@ import 'package:doanquanlyquananai_mobileapp/services/locale_service.dart';
 import 'package:doanquanlyquananai_mobileapp/services/cart_provider.dart';
 import 'package:doanquanlyquananai_mobileapp/l10n/app_localizations.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/splash_screen.dart';
+import 'package:doanquanlyquananai_mobileapp/screens/login_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/core/storage/local_cache.dart';
 import 'package:doanquanlyquananai_mobileapp/services/menu_provider.dart';
 import 'package:doanquanlyquananai_mobileapp/services/table_provider.dart';
@@ -58,6 +59,9 @@ class SmartRestaurantApp extends StatelessWidget {
             title: 'Reserve & Relish - AI Smart Restaurant POS',
             theme: AppTheme.lightTheme,
             home: const SplashScreen(),
+            routes: {
+              '/login': (context) => const LoginScreen(),
+            },
             debugShowCheckedModeBanner: false,
             locale: localeService.locale,
             supportedLocales: AppLocalizations.supportedLocales,

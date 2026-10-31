@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:doanquanlyquananai_mobileapp/core/utils/ai_tracker.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/config/constants.dart';
 import 'package:doanquanlyquananai_mobileapp/services/auth_service.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/staff/staff_tables_screen.dart';
-import 'package:doanquanlyquananai_mobileapp/screens/staff/staff_order_screen.dart';
-import 'package:doanquanlyquananai_mobileapp/screens/staff/kds_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/menu_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/profile_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/widgets/app_bottom_nav.dart';
@@ -25,14 +25,106 @@ class StaffMainScreen extends StatefulWidget {
 class _StaffMainScreenState extends State<StaffMainScreen> {
   int _currentIndex = 0;
   String? _branchName;
+  RealtimeChannel? _ordersChannel;
 
   @override
   void initState() {
     super.initState();
     _loadBranchName();
+    _subscribeToKitchenReady();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadStaffTasks();
     });
+  }
+
+  @override
+  void dispose() {
+    _ordersChannel?.unsubscribe();
+    super.dispose();
+  }
+
+  void _subscribeToKitchenReady() {
+    try {
+      final supabase = Supabase.instance.client;
+      _ordersChannel = supabase.channel('public:orders_kds_ready')
+        ..onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'Orders',
+          callback: (payload) {
+            final newRecord = payload.newRecord;
+            final oldRecord = payload.oldRecord;
+            final status = newRecord['Status'];
+            final note = newRecord['Note']?.toString() ?? '';
+            final oldNote = oldRecord['Note']?.toString() ?? '';
+
+            if (status == 0 &&
+                AiTracker.isKitchenReady(note) &&
+                !AiTracker.isKitchenReady(oldNote)) {
+              final orderId = newRecord['OrderId'];
+              final tableId = newRecord['TableId'];
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        const Icon(Icons.soup_kitchen_rounded, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '🍲 Bếp báo: Toàn bộ đơn #$orderId (Bàn $tableId) đã chế biến xong!',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                    backgroundColor: AppColors.success,
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 4),
+                  ),
+                );
+              }
+            }
+          },
+        )
+        ..onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'OrderItems',
+          callback: (payload) {
+            final newRecord = payload.newRecord;
+            final oldRecord = payload.oldRecord;
+            final newNote = newRecord['Note']?.toString() ?? '';
+            final oldNote = oldRecord['Note']?.toString() ?? '';
+
+            if (AiTracker.isItemDone(newNote) && !AiTracker.isItemDone(oldNote)) {
+              final orderId = newRecord['OrderId'];
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Row(
+                      children: [
+                        const Icon(Icons.soup_kitchen_rounded, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '🍲 Bếp báo ra món cho Đơn #$orderId: Đã nấu xong, sẵn sàng bưng ra bàn!',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                    backgroundColor: const Color(0xFF16A34A),
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+              }
+            }
+          },
+        )
+        ..subscribe();
+    } catch (_) {}
   }
 
   Future<void> _loadStaffTasks() async {
@@ -63,7 +155,6 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
 
   final _screens = const [
     StaffTablesScreen(),
-    StaffOrderScreen(),
     MenuScreen(),
     ProfileScreen(),
   ];
@@ -269,11 +360,32 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              AppConstants.appName,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            Row(
+              children: [
+                Text(
+                  AppConstants.appName,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withAlpha(25),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.primary.withAlpha(50)),
+                  ),
+                  child: const Text(
+                    '🛎️ Phục vụ',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              ],
             ),
             if (user != null)
               Text(
@@ -285,15 +397,6 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
           ],
         ),
         actions: [
-          // KDS (Bếp) shortcut
-          IconButton(
-            icon: const Icon(Icons.restaurant_menu_rounded),
-            tooltip: 'Màn hình bếp (KDS)',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const KdsScreen()),
-            ),
-          ),
           IconButton(
             icon: const Icon(Icons.language_rounded),
             onPressed: () => context.read<LocaleService>().toggleLocale(),
@@ -340,6 +443,20 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
       bottomNavigationBar: AppBottomNav(
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
+        customItems: [
+          AppBottomNavItem(
+            icon: Icons.grid_view_rounded,
+            label: AppLocalizations.of(context).translate('tables'),
+          ),
+          AppBottomNavItem(
+            icon: Icons.restaurant_menu_rounded,
+            label: AppLocalizations.of(context).translate('menu'),
+          ),
+          AppBottomNavItem(
+            icon: Icons.person_rounded,
+            label: AppLocalizations.of(context).translate('profile'),
+          ),
+        ],
       ),
     );
   }
