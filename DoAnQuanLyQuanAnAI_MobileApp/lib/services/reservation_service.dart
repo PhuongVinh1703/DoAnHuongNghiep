@@ -18,7 +18,7 @@ class ReservationService {
       if (branchId != null) {
         query = query.eq('BranchId', branchId);
       }
-      final pageSize = 20;
+      final pageSize = 50;
       final from = (page - 1) * pageSize;
       final to = from + pageSize - 1;
       final res = await query.order('ReservedAt', ascending: false).range(from, to);
@@ -44,7 +44,7 @@ class ReservationService {
 
   Future<ApiResult<List<Reservation>>> getMyReservations(int customerId, {int page = 1}) async {
     try {
-      final pageSize = 10;
+      final pageSize = 20;
       final from = (page - 1) * pageSize;
       final to = from + pageSize - 1;
       final res = await _db
@@ -71,7 +71,7 @@ class ReservationService {
   }) async {
     try {
       int? finalCustomerId = customerId;
-      
+
       // Nếu chưa có customerId, tìm kiếm theo SĐT
       if (finalCustomerId == null) {
         final existingCust = await _db
@@ -96,6 +96,27 @@ class ReservationService {
         }
       }
 
+      // Chặn spam đơn ảo / đặt trùng giờ (trong phạm vi ±2 giờ cùng khách hàng)
+      final existingBookings = await _db
+          .from('Reservations')
+          .select('ReservationId, ReservedAt, Status, ManagerNote')
+          .eq('CustomerId', finalCustomerId)
+          .inFilter('Status', [0, 1]);
+
+      for (final row in (existingBookings as List)) {
+        final existingTime = DateTime.tryParse(row['ReservedAt']?.toString() ?? '');
+        final mgrNote = row['ManagerNote']?.toString() ?? '';
+        if (mgrNote.contains('[SEATED]')) continue;
+        if (existingTime != null) {
+          final diffMins = existingTime.difference(reservedAt).inMinutes.abs();
+          if (diffMins < 120) {
+            return ApiResult.failure(
+              'Bạn đã có một lịch đặt bàn đang chờ hoặc đã xác nhận trong khung giờ này. Vui lòng kiểm tra mục Lịch sử đặt bàn.',
+            );
+          }
+        }
+      }
+
       // Tạo đặt bàn
       final resInsert = await _db.from('Reservations').insert({
         'CustomerId': finalCustomerId,
@@ -108,7 +129,7 @@ class ReservationService {
       }).select('ReservationId').single();
 
       final newId = resInsert['ReservationId'] as int;
-      
+
       // Query ngược lại đầy đủ thông tin kèm joins để trả về cho UI
       final fullRes = await getById(newId);
       if (fullRes.isSuccess && fullRes.data != null) {
@@ -139,6 +160,25 @@ class ReservationService {
 
   Future<ApiResult<void>> cancelReservation(int id) async {
     try {
+      // Nếu phiếu đặt bàn đã được gán bàn và bàn đang ở trạng thái Đã đặt (2), giải phóng bàn về Trống (0)
+      try {
+        final currentRes = await getById(id);
+        final tableId = currentRes.data?.assignedTableId;
+        if (tableId != null) {
+          final tbl = await _db
+              .from('DiningTables')
+              .select('Status')
+              .eq('TableId', tableId)
+              .maybeSingle();
+          if (tbl != null && tbl['Status'] == 2) {
+            await _db
+                .from('DiningTables')
+                .update({'Status': 0})
+                .eq('TableId', tableId);
+          }
+        }
+      } catch (_) {}
+
       await _db.from('Reservations').update({
         'Status': 3, // Cancelled
         'RespondedAt': DateTime.now().toIso8601String(),

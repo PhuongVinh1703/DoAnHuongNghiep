@@ -150,6 +150,20 @@ class AiTracker {
     );
   }
 
+  /// Trích xuất số điện thoại khách đặt bàn được gắn tự động vào đơn hàng ([CUS_PHONE:09xxx])
+  static String? extractCustomerPhone(String? note) {
+    if (note == null || note.isEmpty) return null;
+    final match = RegExp(r'\[CUS_PHONE:([^\]]+)\]').firstMatch(note);
+    final phone = match?.group(1)?.trim();
+    return (phone != null && phone.isNotEmpty) ? phone : null;
+  }
+
+  /// Tạo chuỗi tag [CUS_PHONE:...] để gắn vào Order khi mở bàn từ phiếu đặt chỗ
+  static String formatCustomerPhoneTag(String phone) {
+    final cleaned = phone.trim();
+    return cleaned.isEmpty ? '' : '[CUS_PHONE:$cleaned]';
+  }
+
   /// Kiểm tra bàn có đang yêu cầu tính tiền hay không
   static bool isPaymentRequested(String? note) {
     if (note == null || note.isEmpty) return false;
@@ -183,6 +197,7 @@ class AiTracker {
     if (note == null || note.isEmpty) return '';
     return note
         .replaceAll(RegExp(r'\[AI:[^\]]*\]'), '')
+        .replaceAll(RegExp(r'\[CUS_PHONE:[^\]]*\]'), '')
         .replaceAll(billReqTag, '')
         .replaceAll(kdsReadyTag, '')
         .replaceAll(itemDoneTag, '')
@@ -190,18 +205,23 @@ class AiTracker {
         .trim();
   }
 
-  /// Ghép lại ghi chú của khách với các tag trạng thái và chỉ số AI
+  /// Ghép lại ghi chú của khách với các tag trạng thái, SĐT khách đặt bàn và chỉ số AI
   static String buildUpdatedNote({
     String? currentNote,
     bool? requestPayment,
     bool? kitchenReady,
+    String? customerPhone,
     AiTracker? tracker,
   }) {
     final cleanText = cleanDisplayNote(currentNote);
     final bool reqPay = requestPayment ?? isPaymentRequested(currentNote);
     final bool kdsDone = kitchenReady ?? isKitchenReady(currentNote);
+    final String? phone = customerPhone ?? extractCustomerPhone(currentNote);
 
     final tags = <String>[];
+    if (phone != null && phone.isNotEmpty) {
+      tags.add(formatCustomerPhoneTag(phone));
+    }
     if (reqPay) {
       tags.add(billReqTag);
     }

@@ -316,10 +316,7 @@ class _KdsScreenState extends State<KdsScreen> with TickerProviderStateMixin {
 
   Widget _buildBranchSelector() {
     final user = context.read<AuthService>().currentUser;
-    final canSwitch = user?.role == AppConstants.roleOwner ||
-        user?.role == AppConstants.roleManager ||
-        user?.role == AppConstants.roleKitchen ||
-        user?.branchId == null;
+    final canSwitch = user?.role == AppConstants.roleOwner;
 
     final branchName = _branches
         .firstWhere(
@@ -794,66 +791,78 @@ class _KdsTicketCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       child: Row(
         children: [
-          // Mã đơn badge
+          // Mã đơn badge & Tên bàn nổi bật (High Contrast Chef View)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: isReady
-                  ? const Color(0xFFDCFCE7)
-                  : AppColors.primary.withAlpha(20),
+              color: isReady ? const Color(0xFFDCFCE7) : const Color(0xFF0F172A),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: isReady ? const Color(0xFF86EFAC) : AppColors.primary.withAlpha(60),
-              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.table_restaurant_rounded,
+                  color: isReady ? const Color(0xFF15803D) : Colors.white,
+                  size: 17,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  order.tableName.toUpperCase(),
+                  style: TextStyle(
+                    color: isReady ? const Color(0xFF15803D) : Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // ID đơn
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
               '#${order.orderId}',
               style: TextStyle(
-                color: isReady ? const Color(0xFF15803D) : AppColors.primary,
-                fontWeight: FontWeight.w800,
-                fontSize: 13,
+                color: AppColors.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
 
-          // Tên bàn
+          // Thông tin phục vụ & thời gian
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.table_restaurant_rounded, color: Colors.black87, size: 17),
-                    const SizedBox(width: 5),
-                    Text(
-                      order.tableName,
-                      style: const TextStyle(
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
+                if (isNew) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(6),
                     ),
-                    if (isNew) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          'MỚI',
-                          style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 2),
+                    child: const Text(
+                      'VÉ MỚI',
+                      style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                ],
                 Text(
-                  '${order.staffName.isNotEmpty ? order.staffName : "Phục vụ"} · Lúc ${_formatTime(order.openedAt)}',
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  '${order.staffName.isNotEmpty ? order.staffName : "Phục vụ"} · ${_formatTime(order.openedAt)}',
+                  style: const TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w500),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -863,21 +872,22 @@ class _KdsTicketCard extends StatelessWidget {
           AnimatedBuilder(
             animation: pulseAnimation,
             builder: (_, child) {
-              final isUrgent = elapsed >= 20 && !isReady;
+              final isUrgent = elapsed >= 15 && !isReady;
               final bgColor = isReady
                   ? const Color(0xFFDCFCE7)
                   : (isUrgent
                       ? Color.lerp(const Color(0xFFFEE2E2), const Color(0xFFFECACA), pulseAnimation.value)!
-                      : (elapsed >= 10 ? const Color(0xFFFEF3C7) : const Color(0xFFE0F2FE)));
+                      : (elapsed >= 8 ? const Color(0xFFFEF3C7) : const Color(0xFFE0F2FE)));
               final fgColor = isReady
                   ? const Color(0xFF15803D)
-                  : (isUrgent ? const Color(0xFFB91C1C) : (elapsed >= 10 ? const Color(0xFFB45309) : const Color(0xFF0369A1)));
+                  : (isUrgent ? const Color(0xFFB91C1C) : (elapsed >= 8 ? const Color(0xFFB45309) : const Color(0xFF0369A1)));
 
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: bgColor,
                   borderRadius: BorderRadius.circular(20),
+                  border: isUrgent ? Border.all(color: const Color(0xFFEF4444), width: 1.5) : null,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -887,12 +897,12 @@ class _KdsTicketCard extends StatelessWidget {
                           ? Icons.check_circle_rounded
                           : (isUrgent ? Icons.local_fire_department_rounded : Icons.timer_outlined),
                       color: fgColor,
-                      size: 15,
+                      size: 16,
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      isReady ? 'Đã xong' : '${elapsed}ph',
-                      style: TextStyle(color: fgColor, fontWeight: FontWeight.bold, fontSize: 12),
+                      isReady ? 'Đã xong' : (isUrgent ? 'Chờ ${elapsed}ph!' : '${elapsed}ph'),
+                      style: TextStyle(color: fgColor, fontWeight: FontWeight.w800, fontSize: 12),
                     ),
                   ],
                 ),
@@ -944,37 +954,44 @@ class _KdsTicketCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // Nút thao tác hoàn tất hoặc hoàn tác vé
+          // Nút thao tác hoàn tất hoặc hoàn tác vé (Chuẩn 48dp Touch Target)
           Row(
             children: [
               if (isReady) ...[
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: onUndoReady,
-                    icon: const Icon(Icons.undo_rounded, size: 16),
-                    label: const Text('Hoàn tác vé bếp', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    onPressed: () {
+                      AppHaptics.medium();
+                      onUndoReady();
+                    },
+                    icon: const Icon(Icons.undo_rounded, size: 18),
+                    label: const Text('Hoàn tác vé bếp', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.black54,
-                      side: const BorderSide(color: Color(0xFFCBD5E1)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      foregroundColor: Colors.black87,
+                      side: const BorderSide(color: Color(0xFF94A3B8), width: 1.5),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                   ),
                 ),
               ] else ...[
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: onMarkOrderReady,
-                    icon: const Icon(Icons.done_all_rounded, size: 18),
+                    onPressed: () {
+                      AppHaptics.heavy();
+                      onMarkOrderReady();
+                    },
+                    icon: const Icon(Icons.done_all_rounded, size: 20),
                     label: Text(
-                      allDone ? 'Xác nhận toàn bộ vé đã sẵn sàng' : 'Lên toàn bộ các món & Báo Phục vụ',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                      allDone ? 'Xác nhận toàn bộ vé đã xong' : 'Lên toàn bộ các món & Báo Phục vụ',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
                     ),
                     style: FilledButton.styleFrom(
                       backgroundColor: allDone ? const Color(0xFF16A34A) : AppColors.primary,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      elevation: 0,
                     ),
                   ),
                 ),
@@ -988,7 +1005,7 @@ class _KdsTicketCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  _KdsItemRow — Từng dòng món ăn: BÁO RA MÓN ĐỘC LẬP TỪNG MÓN
+//  _KdsItemRow — Từng dòng món ăn: BÁO RA MÓN ĐỘC LẬP TỪNG MÓN (≥48dp Touch Target)
 // ─────────────────────────────────────────────────────────────────────────────
 class _KdsItemRow extends StatelessWidget {
   final OrderItem item;
@@ -1005,121 +1022,139 @@ class _KdsItemRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final cleanItemNote = AiTracker.cleanDisplayNote(item.note);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      color: isDone ? const Color(0xFFF8FAFC) : Colors.white,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Số lượng món ăn
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: isDone ? const Color(0xFFE2E8F0) : AppColors.primary.withAlpha(25),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '${item.quantity}x',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 13,
-                color: isDone ? Colors.grey : AppColors.primary,
+    return InkWell(
+      onTap: () {
+        AppHaptics.medium();
+        onToggleReady();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        color: isDone ? const Color(0xFFF8FAFC) : Colors.white,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Số lượng món ăn (High contrast & bold)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDone ? const Color(0xFFE2E8F0) : AppColors.primary.withAlpha(25),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isDone ? const Color(0xFFCBD5E1) : AppColors.primary.withAlpha(70),
+                ),
+              ),
+              child: Text(
+                '${item.quantity}x',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                  color: isDone ? Colors.grey[600] : AppColors.primary,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 10),
+            const SizedBox(width: 12),
 
-          // Tên món + Ghi chú món (Cấp độ cay, đá, đường, ...)
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    if (item.emoji != null && item.emoji!.isNotEmpty) ...[
-                      Text(item.emoji!, style: const TextStyle(fontSize: 16)),
-                      const SizedBox(width: 6),
-                    ],
-                    Expanded(
-                      child: Text(
-                        item.itemName,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: isDone ? FontWeight.w500 : FontWeight.w700,
-                          color: isDone ? Colors.grey : Colors.black87,
-                          decoration: isDone ? TextDecoration.lineThrough : null,
+            // Tên món + Ghi chú món ăn
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (item.emoji != null && item.emoji!.isNotEmpty) ...[
+                        Text(item.emoji!, style: const TextStyle(fontSize: 18)),
+                        const SizedBox(width: 6),
+                      ],
+                      Expanded(
+                        child: Text(
+                          item.itemName,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: isDone ? FontWeight.w500 : FontWeight.w800,
+                            color: isDone ? Colors.grey : const Color(0xFF0F172A),
+                            decoration: isDone ? TextDecoration.lineThrough : null,
+                          ),
                         ),
+                      ),
+                    ],
+                  ),
+                  if (cleanItemNote.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFFDE68A)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.sticky_note_2_rounded, size: 13, color: Color(0xFFB45309)),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              cleanItemNote,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF92400E),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
-                ),
-                if (cleanItemNote.isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3C7),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      cleanItemNote,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFFB45309),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
                 ],
-              ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
+            const SizedBox(width: 10),
 
-          // NÚT BÁO LÊN MÓN RIÊNG LẺ
-          if (isDone) ...[
-            InkWell(
-              onTap: onToggleReady,
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            // NÚT BÁO LÊN MÓN RIÊNG LẺ (Chuẩn 44-48dp height)
+            if (isDone) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: const Color(0xFFDCFCE7),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF86EFAC)),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF86EFAC), width: 1.5),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.check_circle_rounded, color: Color(0xFF15803D), size: 16),
-                    SizedBox(width: 4),
+                    Icon(Icons.check_circle_rounded, color: Color(0xFF15803D), size: 18),
+                    SizedBox(width: 6),
                     Text(
                       'Đã lên món',
                       style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
                         color: Color(0xFF15803D),
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-          ] else ...[
-            FilledButton.icon(
-              onPressed: onToggleReady,
-              icon: const Icon(Icons.soup_kitchen_rounded, size: 15),
-              label: const Text('Báo lên món', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                visualDensity: VisualDensity.compact,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ] else ...[
+              FilledButton.icon(
+                onPressed: () {
+                  AppHaptics.heavy();
+                  onToggleReady();
+                },
+                icon: const Icon(Icons.soup_kitchen_rounded, size: 17),
+                label: const Text('Báo lên món', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

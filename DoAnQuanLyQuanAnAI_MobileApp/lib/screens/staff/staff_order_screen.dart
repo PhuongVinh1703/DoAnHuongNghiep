@@ -132,10 +132,7 @@ class _StaffOrderScreenState extends State<StaffOrderScreen> {
 
   Widget _buildBranchFilter() {
     final user = context.read<AuthService>().currentUser;
-    final canSwitch = user?.role == AppConstants.roleOwner ||
-        user?.role == AppConstants.roleManager ||
-        user?.role == AppConstants.roleCashier ||
-        user?.branchId == null;
+    final canSwitch = user?.role == AppConstants.roleOwner;
 
     final branchName = _branches
         .firstWhere(

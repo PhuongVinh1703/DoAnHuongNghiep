@@ -26,6 +26,7 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
   List<Branch> _branches = [];
   int? _selectedBranchId;
   bool _isOwner = false;
+  String _managerBranchName = '';
 
   @override
   void initState() {
@@ -47,13 +48,23 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
   Future<void> _loadBranches() async {
     final auth = context.read<AuthService>();
     final user = auth.currentUser;
-    if (user?.role == 0) {
-      final res = await BranchService().getBranches();
-      if (res.isSuccess) {
-        setState(() {
-          _branches = res.data ?? [];
-        });
-      }
+    _isOwner = (user?.role == 0);
+
+    final res = await BranchService().getBranches();
+    if (res.isSuccess && mounted) {
+      final allBranches = res.data ?? [];
+      setState(() {
+        _branches = allBranches;
+        if (!_isOwner && user?.branchId != null) {
+          _selectedBranchId = user!.branchId;
+          final matched = allBranches.where((b) => b.branchId == user.branchId);
+          if (matched.isNotEmpty) {
+            _managerBranchName = matched.first.name;
+          } else {
+            _managerBranchName = 'Chi nhánh #${user.branchId}';
+          }
+        }
+      });
     }
   }
 
@@ -63,24 +74,25 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
       _error = null;
     });
     try {
+      final auth = context.read<AuthService>();
+      final user = auth.currentUser;
+      _isOwner = (user?.role == 0);
+
       final db = Supabase.instance.client;
       var query = db.from('Accounts').select('*, Branches(Name)');
       if (_roleFilter != null) {
         query = query.eq('Role', _roleFilter!);
       } else {
-        // Mặc định load các role 1 (Staff), 2 (Manager), 4 (Cashier), 5 (Kitchen) để quản lý
+        // Mặc định load các role 1 (Phục vụ), 2 (Quản lý), 4 (Thu ngân), 5 (Bếp KDS)
         query = query.inFilter('Role', [1, 2, 4, 5]);
       }
-
-      final auth = context.read<AuthService>();
-      final user = auth.currentUser;
-      _isOwner = (user?.role == 0);
 
       if (_isOwner) {
         if (_selectedBranchId != null) {
           query = query.eq('BranchId', _selectedBranchId!);
         }
       } else {
+        // Quản lý chi nhánh (Role = 2) CHỈ được xem nhân sự thuộc đúng chi nhánh của mình
         if (user?.branchId != null) {
           query = query.eq('BranchId', user!.branchId!);
         }
@@ -92,22 +104,28 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
         'fullName': acc['FullName'] ?? acc['fullName'] ?? '',
         'username': acc['Username'] ?? acc['username'] ?? '',
         'role': acc['Role'] ?? acc['role'] ?? 1,
+        'gender': acc['Gender'] ?? acc['gender'] ?? 0,
         'isActive': acc['IsActive'] ?? acc['isActive'] ?? true,
         'phone': acc['Phone'] ?? acc['phone'] ?? '',
         'email': acc['Email'] ?? acc['email'] ?? '',
+        'avatar': acc['Avatar'] ?? acc['avatar'] ?? '👤',
         'branchId': acc['BranchId'] ?? acc['branchId'],
         'branchName': (acc['Branches'] as Map?)?['Name'] ?? '—',
       }).toList();
 
-      setState(() {
-        _staff = list;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _staff = list;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _error = 'Lỗi kết nối CSDL: $e';
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = 'Lỗi kết nối CSDL: $e';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -122,7 +140,35 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
     }).toList();
   }
 
+  /// Kiểm tra quyền Khóa / Xóa:
+  /// - Không ai được tự khóa hoặc tự xóa chính mình (isSelf).
+  /// - Quản lý chi nhánh (Role = 2) KHÔNG được khóa/xóa tài khoản Quản lý (Role = 2) hoặc Admin (Role = 0).
+  /// - Chỉ có Admin (Role = 0) mới có quyền khóa/xóa tài khoản Quản lý.
+  bool _canLockOrDelete(dynamic staff) {
+    final currentUser = context.read<AuthService>().currentUser;
+    final staffId = staff['accountId'] as int?;
+    final targetRole = staff['role'] as int? ?? 1;
+
+    if (currentUser == null) return false;
+    // Không bao giờ được tự khóa/xóa chính mình
+    if (staffId == currentUser.accountId) return false;
+    // Nếu không phải Admin (Owner), không được khóa/xóa Quản lý hoặc Owner
+    if (!_isOwner && (targetRole == 2 || targetRole == 0)) return false;
+
+    return true;
+  }
+
   Future<void> _toggleActive(dynamic staff) async {
+    if (!_canLockOrDelete(staff)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Bạn không thể tự khóa tài khoản của chính mình. Chỉ Admin mới có quyền khóa tài khoản Quản lý!'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     final id = staff['accountId'];
     final name = staff['fullName'] ?? '';
     final isActive = staff['isActive'] as bool? ?? true;
@@ -233,7 +279,7 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _AddStaffSheet(
-        branchId: _isOwner ? null : context.read<AuthService>().currentUser?.branchId,
+        branchId: _isOwner ? _selectedBranchId : context.read<AuthService>().currentUser?.branchId,
         isAdmin: _isOwner,
         branches: _branches,
         onSuccess: _loadStaff,
@@ -242,6 +288,8 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
   }
 
   void _showEditStaffDialog(dynamic staff) {
+    final currentUser = context.read<AuthService>().currentUser;
+    final isSelf = (staff['accountId'] == currentUser?.accountId);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -249,13 +297,32 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
       builder: (_) => _EditStaffSheet(
         staff: staff,
         isAdmin: _isOwner,
+        isSelf: isSelf,
         branches: _branches,
-        onSuccess: _loadStaff,
+        onSuccess: () {
+          _loadStaff();
+          if (isSelf) {
+            // Đồng bộ lại tên hiển thị trong cache nếu Quản lý tự sửa tên mình
+            context.read<AuthService>().updateCachedFullName(
+              staff['fullName']?.toString() ?? currentUser?.fullName ?? '',
+            );
+          }
+        },
       ),
     );
   }
 
   Future<void> _deleteStaff(dynamic staff) async {
+    if (!_canLockOrDelete(staff)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Bạn không thể tự xóa tài khoản của chính mình. Chỉ Admin mới có quyền xóa tài khoản Quản lý!'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     final id = staff['accountId'];
     final name = staff['fullName'] ?? '';
     final username = staff['username'] ?? '';
@@ -304,7 +371,6 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
         _loadStaff();
       }
     } catch (_) {
-      // Bị ràng buộc Foreign Key (Orders, Invoices, Attendance, v.v...)
       if (!mounted) return;
       final shouldLock = await showDialog<bool>(
         context: context,
@@ -368,13 +434,16 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
     final email = staff['email'] as String? ?? 'Chưa cập nhật';
     final branchName = staff['branchName'] as String? ?? 'Chưa gán';
     final accountId = staff['accountId'];
+    final canLockOrDelete = _canLockOrDelete(staff);
+    final currentUser = context.read<AuthService>().currentUser;
+    final isSelf = (accountId == currentUser?.accountId);
 
     final roleLabel = switch (role) {
       0 => '👑 Admin / Chủ nhà hàng',
       2 => '🏢 Quản lý chi nhánh',
       1 => '🛎️ Nhân viên phục vụ bàn',
       4 => '💳 Nhân viên thu ngân tại quầy',
-      5 => '👨🍳 Nhân viên bếp (KDS)',
+      5 => '🍲 Nhân viên bếp (KDS)',
       _ => '👤 Nhân viên',
     };
     final roleColor = switch (role) {
@@ -434,9 +503,33 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          fullName,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 19),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                fullName,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 19),
+                              ),
+                            ),
+                            if (isSelf) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withAlpha(20),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'Tài khoản của bạn',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -458,13 +551,19 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
                 isActive ? 'Đang hoạt động' : 'Bị khóa / Tạm ngưng',
                 isActive ? Colors.green : Colors.red,
               ),
+              _detailRow(
+                staff['gender'] == 1 ? Icons.female_rounded : Icons.male_rounded,
+                'Giới tính',
+                staff['gender'] == 1 ? 'Nữ' : 'Nam',
+                Colors.black87,
+              ),
               _detailRow(Icons.store_outlined, 'Chi nhánh làm việc', branchName, Colors.black87),
               _detailRow(Icons.phone_outlined, 'Số điện thoại', phone.isEmpty ? 'Chưa cập nhật' : phone, Colors.black87),
               _detailRow(Icons.email_outlined, 'Email liên hệ', email.isEmpty ? 'Chưa cập nhật' : email, Colors.black87),
               _detailRow(Icons.fingerprint_rounded, 'Mã tài khoản (ID)', 'ACC-$accountId', Colors.black54),
               const SizedBox(height: 16),
-              
-              // Thao tác chỉnh sửa & xóa trong bottom sheet chi tiết
+
+              // Hàng 1: Chỉnh sửa thông tin & Đổi mật khẩu (luôn cho phép với tài khoản của mình và nhân viên)
               Row(
                 children: [
                   Expanded(
@@ -499,42 +598,70 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _toggleActive(staff);
-                      },
-                      icon: Icon(isActive ? Icons.lock_rounded : Icons.lock_open_rounded, size: 18),
-                      label: Text(isActive ? 'Khóa tài khoản' : 'Mở khóa tài khoản', style: const TextStyle(fontWeight: FontWeight.w600)),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: isActive ? Colors.orange[800] : AppColors.success,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+
+              // Hàng 2: Khóa & Xóa (CHỈ hiển thị khi có quyền canLockOrDelete)
+              if (canLockOrDelete) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _toggleActive(staff);
+                        },
+                        icon: Icon(isActive ? Icons.lock_rounded : Icons.lock_open_rounded, size: 18),
+                        label: Text(isActive ? 'Khóa tài khoản' : 'Mở khóa tài khoản', style: const TextStyle(fontWeight: FontWeight.w600)),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: isActive ? Colors.orange[800] : AppColors.success,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _deleteStaff(staff);
-                      },
-                      icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                      label: const Text('Xóa tài khoản', style: TextStyle(fontWeight: FontWeight.w600)),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.error,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _deleteStaff(staff);
+                        },
+                        icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                        label: const Text('Xóa tài khoản', style: TextStyle(fontWeight: FontWeight.w600)),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.error,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
                       ),
                     ),
+                  ],
+                ),
+              ] else ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withAlpha(25),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.withAlpha(100)),
                   ),
-                ],
-              ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.shield_outlined, size: 18, color: Color(0xFFB45309)),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Bạn có thể cập nhật thông tin & mật khẩu, nhưng không thể tự khóa/xóa tài khoản Quản lý (Chỉ Admin mới có quyền khóa).',
+                          style: TextStyle(fontSize: 12, color: Color(0xFF92400E), fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
@@ -574,38 +701,77 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
     );
   }
 
-  Widget _buildBranchFilter() {
+  Widget _buildBranchHeader() {
+    if (_isOwner) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        margin: const EdgeInsets.only(bottom: 8),
+        color: Colors.white,
+        child: Row(
+          children: [
+            const Icon(Icons.store_rounded, color: AppColors.primary, size: 20),
+            const SizedBox(width: 8),
+            const Text('Chi nhánh:', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: DropdownButton<int?>(
+                value: _selectedBranchId,
+                isExpanded: true,
+                underline: const SizedBox(),
+                items: [
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('Tất cả chi nhánh'),
+                  ),
+                  ..._branches.map((b) => DropdownMenuItem<int?>(
+                        value: b.branchId,
+                        child: Text(b.name),
+                      )),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    _selectedBranchId = val;
+                  });
+                  _loadStaff();
+                },
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Nếu là Quản lý chi nhánh (Role = 2): Chỉ hiển thị cố định chi nhánh của mình
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       margin: const EdgeInsets.only(bottom: 8),
       color: Colors.white,
       child: Row(
         children: [
           const Icon(Icons.store_rounded, color: AppColors.primary, size: 20),
           const SizedBox(width: 8),
-          const Text('Chi nhánh:', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(width: 12),
+          const Text('Chi nhánh quản lý:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          const SizedBox(width: 8),
           Expanded(
-            child: DropdownButton<int?>(
-              value: _selectedBranchId,
-              isExpanded: true,
-              underline: const SizedBox(),
-              items: [
-                const DropdownMenuItem<int?>(
-                  value: null,
-                  child: Text('Tất cả chi nhánh'),
-                ),
-                ..._branches.map((b) => DropdownMenuItem<int?>(
-                      value: b.branchId,
-                      child: Text(b.name),
-                    )),
-              ],
-              onChanged: (val) {
-                setState(() {
-                  _selectedBranchId = val;
-                });
-                _loadStaff();
-              },
+            child: Text(
+              _managerBranchName.isNotEmpty ? _managerBranchName : 'Chi nhánh của bạn',
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                color: AppColors.primary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withAlpha(18),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Text(
+              'Cố định theo quyền QL',
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.primary),
             ),
           ),
         ],
@@ -617,6 +783,7 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final filtered = _filtered;
+    final currentUserId = context.watch<AuthService>().currentUser?.accountId;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -643,7 +810,7 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
       ),
       body: Column(
         children: [
-          if (_isOwner) _buildBranchFilter(),
+          _buildBranchHeader(),
           // Search + filter bar
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -678,17 +845,6 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
                         }),
                       ),
                       const SizedBox(width: 8),
-                      if (_isOwner) ...[
-                        _FilterChip(
-                          label: '🏢 Quản lý',
-                          selected: _roleFilter == 2,
-                          onTap: () => setState(() {
-                            _roleFilter = 2;
-                            _loadStaff();
-                          }),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
                       _FilterChip(
                         label: '🛎️ Phục vụ',
                         selected: _roleFilter == 1,
@@ -708,10 +864,19 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
                       ),
                       const SizedBox(width: 8),
                       _FilterChip(
-                        label: '👨🍳 Bếp (KDS)',
+                        label: '🍲 Bếp (KDS)',
                         selected: _roleFilter == 5,
                         onTap: () => setState(() {
                           _roleFilter = 5;
+                          _loadStaff();
+                        }),
+                      ),
+                      const SizedBox(width: 8),
+                      _FilterChip(
+                        label: '🏢 Quản lý',
+                        selected: _roleFilter == 2,
+                        onTap: () => setState(() {
+                          _roleFilter = 2;
                           _loadStaff();
                         }),
                       ),
@@ -741,16 +906,23 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
                               padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                               itemCount: filtered.length,
                               separatorBuilder: (context, index) => const SizedBox(height: 12),
-                              itemBuilder: (_, i) => GestureDetector(
-                                onTap: () => _showStaffDetailsSheet(context, filtered[i]),
-                                child: _StaffCard(
-                                  staff: filtered[i],
-                                  onEdit: () => _showEditStaffDialog(filtered[i]),
-                                  onToggle: () => _toggleActive(filtered[i]),
-                                  onResetPw: () => _resetPassword(filtered[i]),
-                                  onDelete: () => _deleteStaff(filtered[i]),
-                                ),
-                              ),
+                              itemBuilder: (_, i) {
+                                final item = filtered[i];
+                                final isSelf = (item['accountId'] == currentUserId);
+                                final canLock = _canLockOrDelete(item);
+                                return GestureDetector(
+                                  onTap: () => _showStaffDetailsSheet(context, item),
+                                  child: _StaffCard(
+                                    staff: item,
+                                    isSelf: isSelf,
+                                    canLockOrDelete: canLock,
+                                    onEdit: () => _showEditStaffDialog(item),
+                                    onToggle: () => _toggleActive(item),
+                                    onResetPw: () => _resetPassword(item),
+                                    onDelete: () => _deleteStaff(item),
+                                  ),
+                                );
+                              },
                             ),
                           ),
           ),
@@ -794,6 +966,8 @@ class _FilterChip extends StatelessWidget {
 
 class _StaffCard extends StatelessWidget {
   final dynamic staff;
+  final bool isSelf;
+  final bool canLockOrDelete;
   final VoidCallback onEdit;
   final VoidCallback onToggle;
   final VoidCallback onResetPw;
@@ -801,6 +975,8 @@ class _StaffCard extends StatelessWidget {
 
   const _StaffCard({
     required this.staff,
+    required this.isSelf,
+    required this.canLockOrDelete,
     required this.onEdit,
     required this.onToggle,
     required this.onResetPw,
@@ -821,7 +997,7 @@ class _StaffCard extends StatelessWidget {
       2 => '🏢 Quản lý',
       1 => '🛎️ Phục vụ',
       4 => '💳 Thu ngân',
-      5 => '👨🍳 Bếp (KDS)',
+      5 => '🍲 Bếp (KDS)',
       _ => '👤 Nhân viên',
     };
     final roleColor = switch (role) {
@@ -837,7 +1013,12 @@ class _StaffCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppColors.outlineVariant.withAlpha(60)),
+        border: Border.all(
+          color: isSelf
+              ? AppColors.primary.withAlpha(120)
+              : AppColors.outlineVariant.withAlpha(60),
+          width: isSelf ? 1.5 : 1.0,
+        ),
         boxShadow: AppTheme.shadowLevel1,
       ),
       child: Column(
@@ -869,10 +1050,34 @@ class _StaffCard extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            fullName,
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                            overflow: TextOverflow.ellipsis,
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  fullName,
+                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (isSelf) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withAlpha(20),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Text(
+                                    'Bạn',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                         Container(
@@ -931,17 +1136,19 @@ class _StaffCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          // Hàng nút thao tác CRUD trực tiếp
+          // Hàng nút thao tác CRUD
           Row(
             children: [
               // Nút Sửa
-              OutlinedButton.icon(
-                onPressed: onEdit,
-                icon: const Icon(Icons.edit_outlined, size: 14),
-                label: const Text('Sửa', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined, size: 14),
+                  label: const Text('Sửa', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
                 ),
               ),
               const SizedBox(width: 6),
@@ -958,32 +1165,34 @@ class _StaffCard extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
-              // Nút Khóa / Mở
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: onToggle,
-                  icon: Icon(isActive ? Icons.lock_outline_rounded : Icons.lock_open_rounded, size: 14),
-                  label: Text(isActive ? 'Khóa' : 'Mở', style: const TextStyle(fontSize: 12)),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: isActive ? Colors.orange[800] : AppColors.success,
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              if (canLockOrDelete) ...[
+                const SizedBox(width: 6),
+                // Nút Khóa / Mở (Chỉ hiển thị khi được phép)
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: onToggle,
+                    icon: Icon(isActive ? Icons.lock_outline_rounded : Icons.lock_open_rounded, size: 14),
+                    label: Text(isActive ? 'Khóa' : 'Mở', style: const TextStyle(fontSize: 12)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: isActive ? Colors.orange[800] : AppColors.success,
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              // Nút Xóa
-              IconButton(
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                color: AppColors.error,
-                tooltip: 'Xóa tài khoản',
-                style: IconButton.styleFrom(
-                  backgroundColor: AppColors.error.withAlpha(20),
-                  padding: const EdgeInsets.all(8),
+                const SizedBox(width: 6),
+                // Nút Xóa
+                IconButton(
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                  color: AppColors.error,
+                  tooltip: 'Xóa tài khoản',
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.error.withAlpha(20),
+                    padding: const EdgeInsets.all(8),
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ],
@@ -1011,7 +1220,7 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-/// Bottom Sheet: Thêm nhân viên mới
+/// Bottom Sheet: Thêm nhân viên mới (Đã fix triệt để lỗi null Avatar 23502 trên Supabase)
 class _AddStaffSheet extends StatefulWidget {
   final int? branchId;
   final bool isAdmin;
@@ -1037,6 +1246,7 @@ class _AddStaffSheetState extends State<_AddStaffSheet> {
   final _phoneCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   int _role = 1; // default: 1 - Phục vụ
+  int _gender = 0; // 0: Nam, 1: Nữ
   int? _selectedBranchId;
   bool _saving = false;
 
@@ -1057,6 +1267,21 @@ class _AddStaffSheetState extends State<_AddStaffSheet> {
     _phoneCtrl.dispose();
     _emailCtrl.dispose();
     super.dispose();
+  }
+
+  String _avatarForRole(int role, [int gender = 0]) {
+    switch (role) {
+      case 0:
+        return '👑';
+      case 2:
+        return '🏢';
+      case 4:
+        return '💳';
+      case 5:
+        return '🍲';
+      default:
+        return gender == 1 ? '👩‍💼' : '🛎️';
+    }
   }
 
   Future<void> _submit() async {
@@ -1088,23 +1313,34 @@ class _AddStaffSheetState extends State<_AddStaffSheet> {
         return;
       }
 
-      // 2. Gọi RPC tạo tài khoản
-      await db.rpc('create_staff_account', params: {
-        'p_username': username,
-        'p_password': _pwCtrl.text,
-        'p_fullname': _nameCtrl.text.trim(),
-        'p_phone': _phoneCtrl.text.trim(),
-        'p_role': _role,
-        'p_branch_id': _selectedBranchId,
-      });
+      // 2. Tạo bản ghi trực tiếp vào bảng Accounts với đầy đủ trường NOT NULL ("Avatar", "Role", "Gender", "BranchId")
+      final nowIso = DateTime.now().toIso8601String();
+      final inserted = await db
+          .from('Accounts')
+          .insert({
+            'Username': username,
+            'PasswordHash': r'$2a$11$tempPlaceholderHashBeforeRpcReset0000000000000000000',
+            'Role': _role,
+            'FullName': _nameCtrl.text.trim(),
+            'Phone': _phoneCtrl.text.trim().isNotEmpty ? _phoneCtrl.text.trim() : null,
+            'Email': email.isNotEmpty ? email : null,
+            'Avatar': _avatarForRole(_role, _gender),
+            'Gender': _gender,
+            'BranchId': _selectedBranchId,
+            'IsActive': true,
+            'JoinDate': nowIso,
+            'CreatedAt': nowIso,
+          })
+          .select('AccountId')
+          .single();
 
-      // 3. Nếu có email, cập nhật thêm trường Email vào Accounts
-      if (email.isNotEmpty) {
-        await db
-            .from('Accounts')
-            .update({'Email': email})
-            .ilike('Username', username);
-      }
+      final newAccountId = inserted['AccountId'] as int;
+
+      // 3. Gọi RPC reset_staff_password để mã hóa mật khẩu chuẩn BCrypt (pgcrypto) trên Supabase
+      await db.rpc('reset_staff_password', params: {
+        'p_staff_id': newAccountId,
+        'p_new_password': _pwCtrl.text,
+      });
 
       if (mounted) {
         Navigator.pop(context);
@@ -1244,6 +1480,27 @@ class _AddStaffSheetState extends State<_AddStaffSheet> {
                 const SizedBox(height: 14),
               ],
 
+              Text('Giới tính', style: TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _RoleOption(
+                    label: '👨 Nam',
+                    value: 0,
+                    selected: _gender,
+                    onTap: () => setState(() => _gender = 0),
+                  ),
+                  const SizedBox(width: 8),
+                  _RoleOption(
+                    label: '👩 Nữ',
+                    value: 1,
+                    selected: _gender,
+                    onTap: () => setState(() => _gender = 1),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
               Text('Vai trò vận hành', style: TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant)),
               const SizedBox(height: 8),
               Wrap(
@@ -1263,7 +1520,7 @@ class _AddStaffSheetState extends State<_AddStaffSheet> {
                     onTap: () => setState(() => _role = 4),
                   ),
                   _RoleOption(
-                    label: '👨🍳 Bếp KDS',
+                    label: '🍲 Bếp (KDS)',
                     value: 5,
                     selected: _role,
                     onTap: () => setState(() => _role = 5),
@@ -1305,12 +1562,14 @@ class _AddStaffSheetState extends State<_AddStaffSheet> {
 class _EditStaffSheet extends StatefulWidget {
   final dynamic staff;
   final bool isAdmin;
+  final bool isSelf;
   final List<Branch> branches;
   final VoidCallback onSuccess;
 
   const _EditStaffSheet({
     required this.staff,
     required this.isAdmin,
+    required this.isSelf,
     required this.branches,
     required this.onSuccess,
   });
@@ -1325,6 +1584,7 @@ class _EditStaffSheetState extends State<_EditStaffSheet> {
   late final TextEditingController _phoneCtrl;
   late final TextEditingController _emailCtrl;
   late int _role;
+  late int _gender;
   int? _selectedBranchId;
   bool _saving = false;
 
@@ -1335,6 +1595,7 @@ class _EditStaffSheetState extends State<_EditStaffSheet> {
     _phoneCtrl = TextEditingController(text: widget.staff['phone'] as String? ?? '');
     _emailCtrl = TextEditingController(text: widget.staff['email'] as String? ?? '');
     _role = widget.staff['role'] as int? ?? 1;
+    _gender = widget.staff['gender'] as int? ?? 0;
     _selectedBranchId = widget.staff['branchId'] as int?;
   }
 
@@ -1346,6 +1607,21 @@ class _EditStaffSheetState extends State<_EditStaffSheet> {
     super.dispose();
   }
 
+  String _avatarForRole(int role, [int gender = 0]) {
+    switch (role) {
+      case 0:
+        return '👑';
+      case 2:
+        return '🏢';
+      case 4:
+        return '💳';
+      case 5:
+        return '🍲';
+      default:
+        return gender == 1 ? '👩‍💼' : '🛎️';
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
@@ -1354,11 +1630,15 @@ class _EditStaffSheetState extends State<_EditStaffSheet> {
       final db = Supabase.instance.client;
       final accountId = widget.staff['accountId'];
 
+      final phone = _phoneCtrl.text.trim();
+      final email = _emailCtrl.text.trim();
       final updates = <String, dynamic>{
         'FullName': _nameCtrl.text.trim(),
-        'Phone': _phoneCtrl.text.trim(),
-        'Email': _emailCtrl.text.trim(),
+        'Phone': phone.isNotEmpty ? phone : null,
+        'Email': email.isNotEmpty ? email : null,
         'Role': _role,
+        'Gender': _gender,
+        'Avatar': _avatarForRole(_role, _gender),
       };
 
       if (widget.isAdmin && _selectedBranchId != null) {
@@ -1395,6 +1675,7 @@ class _EditStaffSheetState extends State<_EditStaffSheet> {
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
     final username = widget.staff['username'] as String? ?? '';
+    final canChangeRole = widget.isAdmin || (!widget.isSelf && _role != 2 && _role != 0);
 
     return Container(
       padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
@@ -1423,9 +1704,9 @@ class _EditStaffSheetState extends State<_EditStaffSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Chỉnh sửa thông tin nhân viên',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  Text(
+                    widget.isSelf ? 'Cập nhật hồ sơ của bạn' : 'Chỉnh sửa thông tin nhân viên',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1509,40 +1790,65 @@ class _EditStaffSheetState extends State<_EditStaffSheet> {
                 const SizedBox(height: 14),
               ],
 
-              Text('Vai trò vận hành', style: TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant)),
+              if (canChangeRole) ...[
+                Text('Giới tính', style: TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant)),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              Row(
                 children: [
                   _RoleOption(
-                    label: '🛎️ Phục vụ',
+                    label: '👨 Nam',
+                    value: 0,
+                    selected: _gender,
+                    onTap: () => setState(() => _gender = 0),
+                  ),
+                  const SizedBox(width: 8),
+                  _RoleOption(
+                    label: '👩 Nữ',
                     value: 1,
-                    selected: _role,
-                    onTap: () => setState(() => _role = 1),
+                    selected: _gender,
+                    onTap: () => setState(() => _gender = 1),
                   ),
-                  _RoleOption(
-                    label: '💳 Thu ngân',
-                    value: 4,
-                    selected: _role,
-                    onTap: () => setState(() => _role = 4),
-                  ),
-                  _RoleOption(
-                    label: '👨🍳 Bếp KDS',
-                    value: 5,
-                    selected: _role,
-                    onTap: () => setState(() => _role = 5),
-                  ),
-                  if (widget.isAdmin)
-                    _RoleOption(
-                      label: '🏢 Quản lý',
-                      value: 2,
-                      selected: _role,
-                      onTap: () => setState(() => _role = 2),
-                    ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 14),
+
+              Text('Vai trò vận hành', style: TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _RoleOption(
+                      label: '🛎️ Phục vụ',
+                      value: 1,
+                      selected: _role,
+                      onTap: () => setState(() => _role = 1),
+                    ),
+                    _RoleOption(
+                      label: '💳 Thu ngân',
+                      value: 4,
+                      selected: _role,
+                      onTap: () => setState(() => _role = 4),
+                    ),
+                    _RoleOption(
+                      label: '🍲 Bếp (KDS)',
+                      value: 5,
+                      selected: _role,
+                      onTap: () => setState(() => _role = 5),
+                    ),
+                    if (widget.isAdmin)
+                      _RoleOption(
+                        label: '🏢 Quản lý',
+                        value: 2,
+                        selected: _role,
+                        onTap: () => setState(() => _role = 2),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+              ] else ...[
+                const SizedBox(height: 8),
+              ],
 
               SizedBox(
                 width: double.infinity,

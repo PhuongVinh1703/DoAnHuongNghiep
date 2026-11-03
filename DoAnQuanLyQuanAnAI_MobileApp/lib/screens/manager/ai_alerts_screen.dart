@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_theme.dart';
+import 'package:doanquanlyquananai_mobileapp/theme/app_haptics.dart';
 import 'package:doanquanlyquananai_mobileapp/widgets/status_chip.dart';
 import 'package:doanquanlyquananai_mobileapp/services/alert_service.dart';
 import 'package:doanquanlyquananai_mobileapp/models/alert/alert.dart';
 import 'package:doanquanlyquananai_mobileapp/services/branch_service.dart';
 import 'package:doanquanlyquananai_mobileapp/models/branch/branch.dart';
+import 'package:doanquanlyquananai_mobileapp/services/auth_service.dart';
+import 'package:doanquanlyquananai_mobileapp/config/constants.dart';
 import 'package:doanquanlyquananai_mobileapp/widgets/common/app_snackbar.dart';
 import 'package:intl/intl.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/manager/alert_detail_screen.dart';
@@ -24,6 +28,7 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
 
   String _selectedFilter = 'All';
   int? _selectedBranchId;
+  bool _isOwner = false;
 
   List<Alert> _alerts = [];
   List<Branch> _branches = [];
@@ -35,7 +40,14 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = context.read<AuthService>().currentUser;
+      _isOwner = (user?.role == AppConstants.roleOwner);
+      if (!_isOwner && user?.branchId != null) {
+        _selectedBranchId = user!.branchId;
+      }
+      _loadData();
+    });
     _setupRealtime();
   }
 
@@ -68,6 +80,12 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
       setState(() => _isLoading = true);
     }
 
+    final user = context.read<AuthService>().currentUser;
+    _isOwner = (user?.role == AppConstants.roleOwner);
+    if (!_isOwner && user?.branchId != null) {
+      _selectedBranchId = user!.branchId;
+    }
+
     // Load branches
     final branchResult = await _branchSvc.getBranches();
     if (branchResult.isSuccess) {
@@ -77,7 +95,13 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
     // Load alerts
     final alertsResult = await _alertSvc.getAlerts();
     if (alertsResult.isSuccess) {
-      _alerts = alertsResult.data ?? [];
+      final allAlerts = alertsResult.data ?? [];
+      // Quản lý chi nhánh chỉ được xem cảnh báo của đúng chi nhánh mình
+      if (!_isOwner && user?.branchId != null) {
+        _alerts = allAlerts.where((a) => a.branchId == user!.branchId).toList();
+      } else {
+        _alerts = allAlerts;
+      }
     } else {
       if (mounted) {
         AppSnackbar.showError(
@@ -87,7 +111,9 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
       }
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _retrainAi() async {
@@ -108,7 +134,7 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
           context,
           'Huấn luyện lại AI module thành công! Dữ liệu đã được cập nhật.',
         );
-        _loadData(); // Reload alerts
+        _loadData();
       } else {
         AppSnackbar.showError(
           context,
@@ -281,76 +307,77 @@ class _AiAlertsScreenState extends State<AiAlertsScreen> {
                     ),
                   ),
 
-                  // ─── Branch Filter Chips ──────────────────────────
-                  SizedBox(
-                    height: 44,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppTheme.marginMobile,
-                      ),
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: FilterChip(
-                            label: const Text('Tất cả chi nhánh'),
-                            selected: _selectedBranchId == null,
-                            onSelected: (_) =>
-                                setState(() => _selectedBranchId = null),
-                            selectedColor: AppColors.primary.withAlpha(25),
-                            checkmarkColor: AppColors.primary,
-                            labelStyle: TextStyle(
-                              color: _selectedBranchId == null
-                                  ? AppColors.primary
-                                  : AppColors.onSurfaceVariant,
-                              fontWeight: _selectedBranchId == null
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                              fontSize: 13,
-                            ),
-                            backgroundColor: AppColors.surfaceContainerLowest,
-                            side: BorderSide(
-                              color: _selectedBranchId == null
-                                  ? AppColors.primary
-                                  : AppColors.outlineVariant,
-                            ),
-                            shape: const StadiumBorder(),
-                          ),
+                  // ─── Branch Filter Chips (Chỉ Admin/Owner mới được chọn chi nhánh khác) ──
+                  if (_isOwner)
+                    SizedBox(
+                      height: 44,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppTheme.marginMobile,
                         ),
-                        ..._branches.map((b) {
-                          final isSelected = _selectedBranchId == b.branchId;
-                          return Padding(
+                        children: [
+                          Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: FilterChip(
-                              label: Text(b.name),
-                              selected: isSelected,
-                              onSelected: (_) => setState(
-                                () => _selectedBranchId = b.branchId,
-                              ),
+                              label: const Text('Tất cả chi nhánh'),
+                              selected: _selectedBranchId == null,
+                              onSelected: (_) =>
+                                  setState(() => _selectedBranchId = null),
                               selectedColor: AppColors.primary.withAlpha(25),
                               checkmarkColor: AppColors.primary,
                               labelStyle: TextStyle(
-                                color: isSelected
+                                color: _selectedBranchId == null
                                     ? AppColors.primary
                                     : AppColors.onSurfaceVariant,
-                                fontWeight: isSelected
+                                fontWeight: _selectedBranchId == null
                                     ? FontWeight.w600
                                     : FontWeight.w400,
                                 fontSize: 13,
                               ),
                               backgroundColor: AppColors.surfaceContainerLowest,
                               side: BorderSide(
-                                color: isSelected
+                                color: _selectedBranchId == null
                                     ? AppColors.primary
                                     : AppColors.outlineVariant,
                               ),
                               shape: const StadiumBorder(),
                             ),
-                          );
-                        }),
-                      ],
+                          ),
+                          ..._branches.map((b) {
+                            final isSelected = _selectedBranchId == b.branchId;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: FilterChip(
+                                label: Text(b.name),
+                                selected: isSelected,
+                                onSelected: (_) => setState(
+                                  () => _selectedBranchId = b.branchId,
+                                ),
+                                selectedColor: AppColors.primary.withAlpha(25),
+                                checkmarkColor: AppColors.primary,
+                                labelStyle: TextStyle(
+                                  color: isSelected
+                                      ? AppColors.primary
+                                      : AppColors.onSurfaceVariant,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                  fontSize: 13,
+                                ),
+                                backgroundColor: AppColors.surfaceContainerLowest,
+                                side: BorderSide(
+                                  color: isSelected
+                                      ? AppColors.primary
+                                      : AppColors.outlineVariant,
+                                ),
+                                shape: const StadiumBorder(),
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
                     ),
-                  ),
 
                   const SizedBox(height: 12),
 
@@ -414,32 +441,46 @@ class _SummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: color.withAlpha(15),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-          border: Border.all(color: color.withAlpha(40)),
+          border: Border.all(color: color.withAlpha(50), width: 1.2),
+          boxShadow: AppTheme.shadowLevel1,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 20, color: color),
-            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(icon, size: 18, color: color),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
             Text(
               countText ?? '$count',
               style: TextStyle(
                 fontSize: 22,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w900,
                 color: color,
+                letterSpacing: -0.5,
               ),
             ),
             Text(
               label,
               style: TextStyle(
                 fontSize: 11,
-                color: color.withAlpha(180),
-                fontWeight: FontWeight.w500,
+                color: AppColors.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -454,6 +495,18 @@ class _AlertCard extends StatelessWidget {
 
   const _AlertCard({required this.alert, required this.onTap});
 
+  IconData _iconForType(String typeName) {
+    final lower = typeName.toLowerCase();
+    if (lower.contains('speed') || lower.contains('nhanh')) {
+      return Icons.bolt_rounded;
+    } else if (lower.contains('cancel') || lower.contains('void') || lower.contains('hủy')) {
+      return Icons.remove_circle_outline_rounded;
+    } else if (lower.contains('discount') || lower.contains('giảm')) {
+      return Icons.local_offer_outlined;
+    }
+    return Icons.psychology_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
     final severity = alert.severity;
@@ -464,228 +517,207 @@ class _AlertCard extends StatelessWidget {
     Color riskColor;
     StatusType statusType;
     if (severity == 2) {
-      risk = 'HIGH';
+      risk = 'RỦI RO CAO';
       riskColor = AppColors.error;
       statusType = StatusType.alert;
     } else if (severity == 1) {
-      risk = 'MEDIUM';
+      risk = 'TRUNG BÌNH';
       riskColor = AppColors.warning;
       statusType = StatusType.pending;
     } else {
-      risk = 'LOW';
+      risk = 'THEO DÕI';
       riskColor = AppColors.chipDraft;
       statusType = StatusType.draft;
     }
 
+    final typeIcon = _iconForType(alert.alertTypeName);
+
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        AppHaptics.selection();
+        onTap();
+      },
       child: Container(
-      decoration: BoxDecoration(
-        color: isUnread
-            ? riskColor.withAlpha(8)
-            : AppColors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(
-          color: isUnread
-              ? riskColor.withAlpha(60)
-              : AppColors.outlineVariant.withAlpha(60),
-          width: isUnread ? 1.5 : 1,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          border: Border.all(
+            color: isUnread
+                ? riskColor.withAlpha(90)
+                : AppColors.outlineVariant.withAlpha(70),
+            width: isUnread ? 1.5 : 1.0,
+          ),
+          boxShadow: AppTheme.shadowLevel1,
         ),
-        boxShadow: AppTheme.shadowLevel1,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Row(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Dải màu chỉ báo mức độ nghiêm trọng ở cạnh trái (Distilled Visual Cue)
                 Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        riskColor.withAlpha(30),
-                        riskColor.withAlpha(15),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    Icons.psychology_rounded,
-                    size: 20,
-                    color: riskColor,
-                  ),
+                  width: 5,
+                  color: riskColor,
                 ),
-                const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            'ALT-${alert.alertId.toString().padLeft(4, '0')}',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          if (isUnread)
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header: Mã ALT + Icon phân loại + Badge mức rủi ro
+                        Row(
+                          children: [
                             Container(
-                              width: 8,
-                              height: 8,
+                              padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: riskColor,
-                                shape: BoxShape.circle,
+                                color: riskColor.withAlpha(20),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(typeIcon, size: 18, color: riskColor),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'ALT-${alert.alertId.toString().padLeft(4, '0')}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.onSurfaceVariant,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      if (isUnread)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: riskColor,
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: const Text(
+                                            'MỚI',
+                                            style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  Text(
+                                    alert.alertTypeName,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                        ],
-                      ),
-                      Text(
-                        alert.alertTypeName,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                            StatusChip(label: risk, type: statusType),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                StatusChip(label: risk, type: statusType),
-              ],
-            ),
 
-            const SizedBox(height: 14),
+                        const SizedBox(height: 10),
 
-            // Description
-            Text(
-              alert.description,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.onSurfaceVariant,
-                height: 1.5,
-              ),
-            ),
-
-            const SizedBox(height: 14),
-
-            // Score bar
-            Row(
-              children: [
-                Text(
-                  'AI Confidence',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: score,
-                      backgroundColor: AppColors.surfaceContainerHigh,
-                      valueColor: AlwaysStoppedAnimation(riskColor),
-                      minHeight: 6,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '${(score * 100).toInt()}%',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: riskColor,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            // Footer
-            Column(
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.store_rounded,
-                      size: 14,
-                      color: AppColors.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        alert.branchName ?? 'Hệ thống',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.onSurfaceVariant,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Icon(
-                      Icons.person_outline_rounded,
-                      size: 14,
-                      color: AppColors.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        alert.staffName ?? 'Hệ thống',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.onSurfaceVariant,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Divider(height: 1, thickness: 0.5),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.access_time_rounded,
-                          size: 14,
-                          color: AppColors.onSurfaceVariant.withAlpha(180),
-                        ),
-                        const SizedBox(width: 4),
+                        // Mô tả chi tiết hành vi gian lận
                         Text(
-                          'Thời gian ghi nhận',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppColors.onSurfaceVariant.withAlpha(180),
+                          alert.description,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: const Color(0xFF334155),
+                            height: 1.45,
+                            fontSize: 13,
                           ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // AI Confidence Bar (Độ tin cậy của thuật toán)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceContainerLowest,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.outlineVariant.withAlpha(50)),
+                          ),
+                          child: Row(
+                            children: [
+                              Text(
+                                'AI Anomaly Score:',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(3),
+                                  child: LinearProgressIndicator(
+                                    value: score,
+                                    backgroundColor: const Color(0xFFE2E8F0),
+                                    valueColor: AlwaysStoppedAnimation(riskColor),
+                                    minHeight: 5,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${(score * 100).toInt()}%',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                  color: riskColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        // Footer: Chi nhánh & Nhân sự & Thời gian
+                        Row(
+                          children: [
+                            Icon(Icons.store_outlined, size: 13, color: AppColors.onSurfaceVariant),
+                            const SizedBox(width: 4),
+                            Text(
+                              alert.branchName ?? 'Hệ thống',
+                              style: TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(width: 10),
+                            Icon(Icons.person_outline_rounded, size: 13, color: AppColors.onSurfaceVariant),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                alert.staffName ?? 'Không rõ',
+                                style: TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant, fontWeight: FontWeight.w600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Text(
+                              DateFormat('dd/MM · HH:mm').format(alert.createdAt),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    Text(
-                      '${DateFormat('dd/MM/yyyy').format(alert.createdAt)} · ${DateFormat('HH:mm').format(alert.createdAt)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
-          ],
+          ),
         ),
-      ),
       ),
     );
   }

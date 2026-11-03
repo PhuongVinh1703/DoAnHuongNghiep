@@ -1,11 +1,12 @@
 import 'package:doanquanlyquananai_mobileapp/core/network/api_response.dart';
 import 'package:doanquanlyquananai_mobileapp/models/order/order.dart';
+import 'package:doanquanlyquananai_mobileapp/core/utils/ai_tracker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class OrderService {
   final _db = Supabase.instance.client;
 
-  /// Lấy order mở của bàn
+  /// Lấy order mở của bàn (Dùng order + limit(1) để tránh lỗi PGRST116 nếu bàn bị kẹt >1 đơn mở)
   Future<ApiResult<OrderModel?>> getOpenOrderByTable(int tableId) async {
     try {
       final res = await _db
@@ -13,8 +14,10 @@ class OrderService {
           .select('*, OrderItems(*, MenuItems(*)), DiningTables(TableName, BranchId), Accounts(FullName)')
           .eq('TableId', tableId)
           .eq('Status', 0)
+          .order('OpenedAt', ascending: false)
+          .limit(1)
           .maybeSingle();
-          
+
       if (res == null) return ApiResult.success(null);
 
       // Lọc các items chưa bị xóa
@@ -50,16 +53,16 @@ class OrderService {
   }
 
   Future<ApiResult<List<OrderModel>>> getOrders({
-    int? status, 
+    int? status,
     int? branchId,
-    int page = 1, 
-    int pageSize = 50
+    int page = 1,
+    int pageSize = 50,
   }) async {
     try {
       var query = _db
           .from('Orders')
           .select('*, OrderItems(*, MenuItems(*)), DiningTables(TableName, BranchId), Accounts(FullName)');
-          
+
       if (status != null) {
         query = query.eq('Status', status);
       }
@@ -115,7 +118,7 @@ class OrderService {
     }
   }
 
-  /// Thêm món — cộng dồn số lượng nếu đã tồn tại
+  /// Thêm món — chỉ cộng dồn nếu món đó chưa được Bếp nấu xong ([DONE]) và có cùng ghi chú
   Future<ApiResult<OrderModel>> addItem(
     int orderId,
     int itemId,
@@ -123,24 +126,36 @@ class OrderService {
     String? note,
   }) async {
     try {
-      // 1. Kiểm tra xem món đó đã có trong OrderItems chưa
-      final existing = await _db
+      // 1. Lấy danh sách các dòng của món này trong OrderItems (dùng select list thay vì maybeSingle để không crash)
+      final existingRows = await _db
           .from('OrderItems')
           .select()
           .eq('OrderId', orderId)
           .eq('ItemId', itemId)
-          .eq('IsDeleted', false)
-          .maybeSingle();
+          .eq('IsDeleted', false);
 
-      if (existing != null) {
-        // Món đã có -> Cộng dồn số lượng
-        final newQty = (existing['Quantity'] as int) + qty;
+      final rows = existingRows as List? ?? [];
+      final cleanNewNote = AiTracker.cleanDisplayNote(note);
+
+      // Tìm dòng chưa lên món ([DONE]) và có cùng ghi chú để cộng dồn
+      Map<String, dynamic>? matchingRow;
+      for (final r in rows) {
+        final rNote = r['Note']?.toString();
+        if (!AiTracker.isItemDone(rNote) &&
+            AiTracker.cleanDisplayNote(rNote) == cleanNewNote) {
+          matchingRow = r as Map<String, dynamic>;
+          break;
+        }
+      }
+
+      if (matchingRow != null) {
+        final newQty = (matchingRow['Quantity'] as int) + qty;
         await _db
             .from('OrderItems')
             .update({'Quantity': newQty})
-            .eq('OrderItemId', existing['OrderItemId']);
+            .eq('OrderItemId', matchingRow['OrderItemId']);
       } else {
-        // Món chưa có -> Lấy đơn giá hiện tại từ thực đơn
+        // Món chưa có hoặc đợt trước Bếp đã nấu xong -> Tạo dòng mới để Bếp nhận thông báo nấu tiếp
         final menuItem = await _db
             .from('MenuItems')
             .select('Price')
@@ -148,7 +163,6 @@ class OrderService {
             .single();
         final double price = (menuItem['Price'] as num).toDouble();
 
-        // Thêm mới vào OrderItems
         await _db.from('OrderItems').insert({
           'OrderId': orderId,
           'ItemId': itemId,
@@ -156,11 +170,28 @@ class OrderService {
           'UnitPrice': price,
           'AddedAt': DateTime.now().toIso8601String(),
           'IsDeleted': false,
-          'Note': note,
+          'Note': cleanNewNote.isNotEmpty ? cleanNewNote : null,
         });
       }
 
-      // Trả về order mới cập nhật
+      // Nếu đơn trước đó đã đánh dấu [KDS_READY], khi gọi thêm món mới thì gỡ [KDS_READY] để Bếp nấu món mới
+      final currentOrderRes = await _db
+          .from('Orders')
+          .select('Note')
+          .eq('OrderId', orderId)
+          .maybeSingle();
+      final currentOrderNote = currentOrderRes?['Note']?.toString();
+      if (AiTracker.isKitchenReady(currentOrderNote)) {
+        final updatedOrderNote = AiTracker.buildUpdatedNote(
+          currentNote: currentOrderNote,
+          kitchenReady: false,
+        );
+        await _db
+            .from('Orders')
+            .update({'Note': updatedOrderNote})
+            .eq('OrderId', orderId);
+      }
+
       return await getOrderById(orderId);
     } catch (e) {
       return ApiResult.failure('Lỗi thêm món: $e');

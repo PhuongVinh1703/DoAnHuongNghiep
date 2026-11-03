@@ -45,7 +45,11 @@ class OrderProvider with ChangeNotifier {
   }
 
   /// Gán đơn hàng hiện tại (dùng khi Thu ngân bấm "Tính tiền" trực tiếp từ danh sách)
+  /// Reset bộ đếm cũ trước khi đọc từ order.note để không bị rò rỉ voidCount giữa các bàn!
   void setCurrentOrder(OrderModel order) {
+    if (_currentOrder?.orderId != order.orderId) {
+      _resetCounters(keepVoidCount: false);
+    }
     _currentOrder = order;
     _tableOpenedAt = order.openedAt;
     final merged = AiTracker.mergeFromOrderNote(
@@ -73,13 +77,17 @@ class OrderProvider with ChangeNotifier {
       final result = await orderService.getOpenOrderByTable(tableId);
 
       if (result.isSuccess) {
-        _currentOrder = result.data;
-        if (_currentOrder != null) {
-          _tableOpenedAt ??= _currentOrder!.openedAt;
+        final fetched = result.data;
+        if (fetched != null) {
+          if (_currentOrder?.orderId != fetched.orderId) {
+            _resetCounters(keepVoidCount: false);
+          }
+          _currentOrder = fetched;
+          _tableOpenedAt = fetched.openedAt;
           final merged = AiTracker.mergeFromOrderNote(
-            _currentOrder!.note,
+            fetched.note,
             getAiTracker(),
-            openedAt: _currentOrder!.openedAt,
+            openedAt: fetched.openedAt,
           );
           _voidCount = merged.voidCount;
           _addCount = merged.totalAdded;
@@ -88,7 +96,8 @@ class OrderProvider with ChangeNotifier {
           _confirmClicked = merged.hasConfirmed;
           _confirmTime = merged.confirmTime;
         } else {
-          _resetCounters(keepVoidCount: true);
+          _currentOrder = null;
+          _resetCounters(keepVoidCount: false);
         }
       } else {
         _error = result.error ?? 'Lỗi tải order';
@@ -112,7 +121,7 @@ class OrderProvider with ChangeNotifier {
       );
 
       if (result.isSuccess && result.data != null) {
-        _resetCounters(keepVoidCount: true);
+        _resetCounters(keepVoidCount: false);
         _tableOpenedAt = DateTime.now();
         _currentOrder = result.data;
         notifyListeners();

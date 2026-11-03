@@ -11,6 +11,7 @@ import 'package:doanquanlyquananai_mobileapp/services/menu_provider.dart';
 import 'package:doanquanlyquananai_mobileapp/services/order_provider.dart';
 import 'package:doanquanlyquananai_mobileapp/models/menu/menu_item.dart';
 import 'package:doanquanlyquananai_mobileapp/models/menu/menu_category.dart';
+import 'package:doanquanlyquananai_mobileapp/models/order/order.dart';
 import 'package:doanquanlyquananai_mobileapp/l10n/app_localizations.dart';
 import 'package:doanquanlyquananai_mobileapp/screens/staff/checkout_screen.dart';
 import 'package:doanquanlyquananai_mobileapp/core/utils/ai_tracker.dart';
@@ -54,11 +55,9 @@ class _MenuOrderScreenState extends State<MenuOrderScreen>
     return '${formatted}đ';
   }
 
-  // ─── Thêm món với haptics & Modifier Sheet ──────────────────
+  // ─── Thêm món nhanh ─────────────────────────────────────────
   Future<void> _handleAddItem(BuildContext context, MenuItemModel item,
       OrderProvider orderProvider) async {
-    // Nếu món có ghi chú đặc biệt (description), có thể mở modifier
-    // Hiện tại: thêm thẳng + haptic
     AppHaptics.medium();
     await orderProvider.addItem(item.itemId, 1);
   }
@@ -306,18 +305,22 @@ class _MenuOrderScreenState extends State<MenuOrderScreen>
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
-        final orderItem = orderProvider.currentOrder?.items
-            .where((oi) => oi.itemId == item.itemId)
-            .firstOrNull;
+        final matchingItems = orderProvider.currentOrder?.items
+                .where((oi) => oi.itemId == item.itemId)
+                .toList() ??
+            [];
+        final totalQty = matchingItems.fold<int>(0, (s, oi) => s + oi.quantity);
+        final lastOrderItem = matchingItems.lastOrNull;
+
         return _MenuItemCard(
           item: item,
-          quantity: orderItem?.quantity ?? 0,
+          quantity: totalQty,
           onAdd: () => _handleAddItem(context, item, orderProvider),
-          onRemove: orderItem != null
+          onRemove: lastOrderItem != null
               ? () async {
                   AppHaptics.light();
                   final success = await orderProvider.updateItemQty(
-                      orderItem.orderItemId, orderItem.quantity - 1);
+                      lastOrderItem.orderItemId, lastOrderItem.quantity - 1);
                   if (success &&
                       orderProvider.currentOrder == null &&
                       context.mounted) {
@@ -336,7 +339,7 @@ class _MenuOrderScreenState extends State<MenuOrderScreen>
     );
   }
 
-  // ─── Item Note / Modifier Bottom Sheet ───────────────────
+  // ─── Item Note Bottom Sheet ───────────────────────────────
   void _showItemNoteSheet(BuildContext context, MenuItemModel item,
       OrderProvider orderProvider) {
     AppHaptics.medium();
@@ -434,6 +437,27 @@ class _MenuItemCard extends StatelessWidget {
                     ),
                     emojiSize: 44,
                   ),
+                  // Nút ghi chú món ăn (góc trái trên)
+                  if (item.isAvailable && onLongPress != null)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: GestureDetector(
+                        onTap: onLongPress,
+                        child: Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withAlpha(110),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.edit_note_rounded,
+                            size: 15,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
                   // Badge số lượng nổi trên ảnh
                   if (quantity > 0)
                     Positioned(
@@ -613,14 +637,14 @@ class _QtyButton extends StatelessWidget {
   }
 }
 
-// ─── Floating Cart Bar ────────────────────────────────────────────
+// ─── Floating Cart Bar (Đã sửa lỗi item.price -> item.unitPrice) ─
 class _FloatingCartBar extends StatelessWidget {
   final int itemCount;
   final double subtotal;
   final String Function(double) formatCurrency;
   final bool expanded;
   final VoidCallback onToggle;
-  final dynamic order;
+  final OrderModel? order;
   final OrderProvider orderProvider;
   final VoidCallback onCheckout;
   final int userRole;
@@ -664,10 +688,12 @@ class _FloatingCartBar extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             // ── Drag handle ───────────────────────────
-            if (expanded)
-              Center(
+            GestureDetector(
+              onTap: onToggle,
+              behavior: HitTestBehavior.opaque,
+              child: Center(
                 child: Container(
-                  margin: const EdgeInsets.only(top: 10, bottom: 4),
+                  margin: const EdgeInsets.only(top: 8, bottom: 2),
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
@@ -676,11 +702,12 @@ class _FloatingCartBar extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
 
             // ── Cart summary row ──────────────────────
             Padding(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
                 children: [
                   // Cart icon + badge
@@ -721,18 +748,32 @@ class _FloatingCartBar extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Subtotal info
+                  // Subtotal info (bấm để bung danh sách món)
                   Expanded(
                     child: GestureDetector(
                       onTap: onToggle,
+                      behavior: HitTestBehavior.opaque,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '$itemCount món',
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.onSurfaceVariant),
+                          Row(
+                            children: [
+                              Text(
+                                '$itemCount món đã chọn',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.onSurfaceVariant),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                expanded
+                                    ? Icons.keyboard_arrow_down_rounded
+                                    : Icons.keyboard_arrow_up_rounded,
+                                size: 16,
+                                color: AppColors.primary,
+                              ),
+                            ],
                           ),
                           Text(
                             formatCurrency(subtotal),
@@ -827,7 +868,7 @@ class _FloatingCartBar extends StatelessWidget {
               ),
             ),
 
-            // ── Expanded Cart Item List ───────────────
+            // ── Expanded Cart Item List (Đã fix item.unitPrice) ──
             if (expanded && order != null)
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 280),
@@ -835,11 +876,14 @@ class _FloatingCartBar extends StatelessWidget {
                   shrinkWrap: true,
                   padding:
                       const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  itemCount: order.items.length,
+                  itemCount: order!.items.length,
                   separatorBuilder: (context, index) =>
                       const Divider(height: 1),
                   itemBuilder: (context, index) {
-                    final item = order.items[index];
+                    final item = order!.items[index];
+                    final cleanItemNote = AiTracker.cleanDisplayNote(item.note);
+                    final isDone = AiTracker.isItemDone(item.note);
+
                     return Padding(
                       padding:
                           const EdgeInsets.symmetric(vertical: 8),
@@ -853,26 +897,37 @@ class _FloatingCartBar extends StatelessWidget {
                                   item.itemName,
                                   style: const TextStyle(
                                       fontSize: 14,
-                                      fontWeight: FontWeight.w500),
+                                      fontWeight: FontWeight.w600),
                                 ),
-                                if (AiTracker.isItemDone(item.note)) ...[
-                                  const SizedBox(height: 2),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFDCFCE7),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: const Text(
-                                      '✅ Bếp đã lên món',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF15803D),
-                                      ),
+                                if (cleanItemNote.isNotEmpty)
+                                  Text(
+                                    'Ghi chú: $cleanItemNote',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.amber[900],
+                                      fontStyle: FontStyle.italic,
                                     ),
                                   ),
-                                ],
+                                const SizedBox(height: 2),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: isDone
+                                        ? const Color(0xFFDCFCE7)
+                                        : const Color(0xFFFEF3C7),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    isDone ? '✅ Bếp đã lên món' : '⏳ Bếp đang chế biến',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDone
+                                          ? const Color(0xFF15803D)
+                                          : const Color(0xFFB45309),
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -922,12 +977,12 @@ class _FloatingCartBar extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          // Line total
+                          // Line total (Sử dụng item.unitPrice * item.quantity thay vì item.price bị lỗi)
                           Text(
-                            _fmtCurrency(item.price * item.quantity),
+                            _fmtCurrency(item.unitPrice * item.quantity),
                             style: const TextStyle(
                                 fontSize: 13,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w700,
                                 color: AppColors.primary),
                           ),
                         ],
@@ -949,7 +1004,7 @@ class _FloatingCartBar extends StatelessWidget {
   }
 }
 
-// ─── Item Modifier / Note Bottom Sheet ───────────────────────────
+// ─── Item Note Bottom Sheet (Gọn gàng cho nhà hàng) ──────────────
 class _ItemModifierSheet extends StatefulWidget {
   final MenuItemModel item;
   final OrderProvider orderProvider;
@@ -962,26 +1017,24 @@ class _ItemModifierSheet extends StatefulWidget {
 
 class _ItemModifierSheetState extends State<_ItemModifierSheet> {
   int _qty = 1;
-  int _spiceLevel = 0;    // 0=Bình thường, 1=Ít cay, 2=Cay vừa, 3=Cay nhiều
-  int _iceLevel = 2;      // 0=Không đá, 1=Ít đá, 2=Đá thường, 3=Nhiều đá
-  int _sugarLevel = 2;    // 0=Không đường, 1=Ít ngọt, 2=Bình thường, 3=Ngọt nhiều
   final _noteCtrl = TextEditingController();
 
-  static const _spiceLabels = ['Bình thường', 'Ít cay', 'Cay vừa', 'Cay nhiều'];
-  static const _iceLabels   = ['Không đá', 'Ít đá', 'Đá bình thường', 'Nhiều đá'];
-  static const _sugarLabels = ['Không đường', 'Ít ngọt', 'Bình thường', 'Ngọt nhiều'];
+  static const _quickNotes = [
+    'Ít cay',
+    'Không cay',
+    'Không hành',
+    'Ít đá',
+    'Không đá',
+    'Ít ngọt',
+    'Mang ra trước',
+  ];
+  final Set<String> _selectedQuickNotes = {};
 
   @override
   void dispose() {
     _noteCtrl.dispose();
     super.dispose();
   }
-
-  bool get _isFood => !widget.item.name.toLowerCase().contains('nước')
-      && !widget.item.name.toLowerCase().contains('cà phê')
-      && !widget.item.name.toLowerCase().contains('trà')
-      && !widget.item.name.toLowerCase().contains('sinh tố')
-      && !widget.item.name.toLowerCase().contains('nha đam');
 
   @override
   Widget build(BuildContext context) {
@@ -1061,38 +1114,56 @@ class _ItemModifierSheetState extends State<_ItemModifierSheet> {
               ],
             ),
 
-            // ── Modifiers (spice / ice / sugar) ──────
-            if (_isFood) ...[
-              const SizedBox(height: 20),
-              _buildSectionTitle('Mức độ cay'),
-              const SizedBox(height: 8),
-              _buildSegmentControl(
-                  _spiceLabels, _spiceLevel,
-                  (i) => setState(() => _spiceLevel = i)),
-            ] else ...[
-              const SizedBox(height: 20),
-              _buildSectionTitle('Lượng đá'),
-              const SizedBox(height: 8),
-              _buildSegmentControl(
-                  _iceLabels, _iceLevel,
-                  (i) => setState(() => _iceLevel = i)),
-              const SizedBox(height: 14),
-              _buildSectionTitle('Mức đường'),
-              const SizedBox(height: 8),
-              _buildSegmentControl(
-                  _sugarLabels, _sugarLevel,
-                  (i) => setState(() => _sugarLevel = i)),
-            ],
+            const SizedBox(height: 18),
+            _buildSectionTitle('Ghi chú nhanh cho Bếp'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: _quickNotes.map((tag) {
+                final isSelected = _selectedQuickNotes.contains(tag);
+                return GestureDetector(
+                  onTap: () {
+                    AppHaptics.selection();
+                    setState(() {
+                      if (isSelected) {
+                        _selectedQuickNotes.remove(tag);
+                      } else {
+                        _selectedQuickNotes.add(tag);
+                      }
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected ? AppColors.primary : AppColors.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                      border: Border.all(
+                        color: isSelected ? AppColors.primary : AppColors.outlineVariant,
+                      ),
+                    ),
+                    child: Text(
+                      tag,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected ? Colors.white : AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
 
             // ── Kitchen Note ──────────────────────────
-            const SizedBox(height: 18),
-            _buildSectionTitle('Ghi chú cho bếp (tùy chọn)'),
+            const SizedBox(height: 16),
+            _buildSectionTitle('Ghi chú thêm (tùy chọn)'),
             const SizedBox(height: 8),
             TextField(
               controller: _noteCtrl,
               maxLines: 2,
               decoration: InputDecoration(
-                hintText: 'Vd: Không hành, dị ứng đậu phộng...',
+                hintText: 'Vd: Dị ứng đậu phộng, tách riêng nước sốt...',
                 filled: true,
                 fillColor: AppColors.surfaceContainerHigh.withAlpha(60),
                 border: OutlineInputBorder(
@@ -1112,15 +1183,11 @@ class _ItemModifierSheetState extends State<_ItemModifierSheet> {
                 onPressed: () async {
                   AppHaptics.heavy();
                   Navigator.pop(context);
-                  String composedNote = '';
-                  if (_isFood) {
-                    composedNote = _spiceLabels[_spiceLevel];
-                  } else {
-                    composedNote = '${_iceLabels[_iceLevel]}, ${_sugarLabels[_sugarLevel]}';
-                  }
-                  if (_noteCtrl.text.trim().isNotEmpty) {
-                    composedNote += (composedNote.isNotEmpty ? ' - ' : '') + _noteCtrl.text.trim();
-                  }
+                  final parts = <String>[
+                    ..._selectedQuickNotes,
+                    if (_noteCtrl.text.trim().isNotEmpty) _noteCtrl.text.trim(),
+                  ];
+                  final composedNote = parts.join(', ');
                   await widget.orderProvider.addItem(
                     widget.item.itemId,
                     _qty,
@@ -1157,44 +1224,6 @@ class _ItemModifierSheetState extends State<_ItemModifierSheet> {
             fontWeight: FontWeight.w600,
             color: AppColors.onSurfaceVariant),
       );
-
-  Widget _buildSegmentControl(
-      List<String> labels, int selected, ValueChanged<int> onSelect) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 6,
-      children: List.generate(labels.length, (i) {
-        final isSelected = selected == i;
-        return GestureDetector(
-          onTap: () {
-            AppHaptics.selection();
-            onSelect(i);
-          },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            decoration: BoxDecoration(
-              color: isSelected ? AppColors.primary : AppColors.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(AppTheme.radiusFull),
-              border: Border.all(
-                  color: isSelected
-                      ? AppColors.primary
-                      : AppColors.outlineVariant),
-            ),
-            child: Text(
-              labels[i],
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: isSelected ? Colors.white : AppColors.onSurfaceVariant,
-              ),
-            ),
-          ),
-        );
-      }),
-    );
-  }
 
   String _fmtCurrency(double amount) {
     final f = amount.toInt().toString().replaceAllMapped(

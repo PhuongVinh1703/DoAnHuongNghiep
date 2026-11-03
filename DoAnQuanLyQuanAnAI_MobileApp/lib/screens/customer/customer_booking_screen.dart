@@ -85,12 +85,12 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen>
     final slots = <TimeOfDay>[];
     final now = DateTime.now();
     final isToday = date.year == now.year && date.month == now.month && date.day == now.day;
-    
+
     for (int hour = 8; hour <= 21; hour++) {
       for (int minute in [0, 30]) {
-        // Skip past times if today
         if (isToday) {
-          if (hour < now.hour || (hour == now.hour && minute <= now.minute)) {
+          final candidate = DateTime(date.year, date.month, date.day, hour, minute);
+          if (candidate.isBefore(now.add(const Duration(minutes: 30)))) {
             continue;
           }
         }
@@ -157,7 +157,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen>
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Xác nhận hủy'),
-        content: const Text('Bạn có chắc muốn hủy đặt bàn này không?'),
+        content: const Text('Bạn có chắc muốn hủy lịch đặt bàn này không?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Không')),
           FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Hủy bàn')),
@@ -203,7 +203,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen>
         const SizedBox(height: 4),
 
         // Branch selector
-        _SectionLabel(label: '📍 Chi nhánh'),
+        const _SectionLabel(label: '📍 Chi nhánh'),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
@@ -226,19 +226,19 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen>
         const SizedBox(height: 20),
 
         // Date & Time
-        _SectionLabel(label: '📅 Chọn Ngày'),
+        const _SectionLabel(label: '📅 Chọn Ngày'),
         const SizedBox(height: 8),
         _buildDateSelector(),
         const SizedBox(height: 20),
-        
-        _SectionLabel(label: '⏰ Chọn Giờ'),
+
+        const _SectionLabel(label: '⏰ Chọn Giờ'),
         const SizedBox(height: 8),
         _buildTimeSelector(),
 
         const SizedBox(height: 20),
 
         // Guest count
-        _SectionLabel(label: '👥 Số người'),
+        const _SectionLabel(label: '👥 Số người'),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
@@ -265,13 +265,13 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen>
         const SizedBox(height: 20),
 
         // Note
-        _SectionLabel(label: '📝 Ghi chú (tùy chọn)'),
+        const _SectionLabel(label: '📝 Ghi chú (tùy chọn)'),
         const SizedBox(height: 8),
         TextField(
           controller: _noteController,
           maxLines: 3,
           decoration: InputDecoration(
-            hintText: 'Yêu cầu đặc biệt, dị ứng thực phẩm...',
+            hintText: 'Yêu cầu đặc biệt (ghế trẻ em, bàn yên tĩnh, dị ứng thực phẩm...)',
             filled: true,
             fillColor: AppColors.surfaceContainerLowest,
             border: OutlineInputBorder(
@@ -303,7 +303,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen>
 
         const SizedBox(height: 8),
         const Text(
-          '* Nhà hàng sẽ xác nhận đặt bàn trong vòng 30 phút.',
+          '* Nhà hàng giữ bàn tối đa 15 phút tính từ giờ hẹn. Vui lòng đến đúng giờ để được phục vụ tốt nhất.',
           style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant, fontStyle: FontStyle.italic),
           textAlign: TextAlign.center,
         ),
@@ -322,7 +322,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen>
         itemBuilder: (context, i) {
           final date = dates[i];
           final isSelected = date.year == _selectedDate.year && date.month == _selectedDate.month && date.day == _selectedDate.day;
-          
+
           String dayName = DateFormat('EEE', 'vi').format(date);
           if (i == 0) {
             dayName = 'Hôm nay';
@@ -351,13 +351,13 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(dayName, style: TextStyle(
-                    fontSize: 12, 
+                    fontSize: 12,
                     color: isSelected ? Colors.white : AppColors.onSurfaceVariant,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal
                   )),
                   const SizedBox(height: 4),
                   Text(DateFormat('dd/MM').format(date), style: TextStyle(
-                    fontSize: 15, 
+                    fontSize: 15,
                     fontWeight: FontWeight.bold,
                     color: isSelected ? Colors.white : AppColors.onSurface
                   )),
@@ -416,7 +416,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen>
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: 80, height: 80,
-            decoration: BoxDecoration(color: AppColors.surfaceContainerHigh, shape: BoxShape.circle),
+            decoration: const BoxDecoration(color: AppColors.surfaceContainerHigh, shape: BoxShape.circle),
             child: const Icon(Icons.event_busy_rounded, size: 36, color: AppColors.onSurfaceVariant),
           ),
           const SizedBox(height: 16),
@@ -432,7 +432,7 @@ class _CustomerBookingScreenState extends State<CustomerBookingScreen>
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: AppTheme.marginMobile, vertical: 12),
         itemCount: _myReservations.length,
-        separatorBuilder: (_, i2) => const SizedBox(height: 12),
+        separatorBuilder: (_, _) => const SizedBox(height: 12),
         itemBuilder: (ctx, i) => _HistoryCard(
           reservation: _myReservations[i],
           onCancel: () => _cancelReservation(_myReservations[i].reservationId),
@@ -458,141 +458,24 @@ class _HistoryCard extends StatelessWidget {
   final VoidCallback onCancel;
   const _HistoryCard({required this.reservation, required this.onCancel});
 
-  Widget _buildReservationNote(String? note, BuildContext context) {
-    if (note == null || note.isEmpty) return const SizedBox.shrink();
-
-    final bool hasPreOrder = note.contains('[Pre-order:');
-    final bool hasStatus = note.contains('[Trạng thái:');
-
-    if (!hasPreOrder && !hasStatus) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.sticky_note_2_outlined, size: 14, color: AppColors.onSurfaceVariant),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                note,
-                style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant, fontStyle: FontStyle.italic),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    String userNote = '';
-    String preOrderDetails = '';
-    String depositStatus = '';
-
-    String workingNote = note;
-    final int b2cStartIndex = workingNote.indexOf('[');
-    if (b2cStartIndex > 0) {
-      userNote = workingNote.substring(0, b2cStartIndex).trim();
-      workingNote = workingNote.substring(b2cStartIndex);
-    }
-
-    final cleaned = workingNote.replaceAll('[', '').replaceAll(']', '');
-    if (cleaned.contains('Pre-order:')) {
-      final parts = cleaned.split('. Trạng thái:');
-      preOrderDetails = parts[0].replaceAll('Pre-order:', '').trim();
-      if (parts.length > 1) {
-        depositStatus = parts[1].trim();
-      }
-    } else if (cleaned.contains('Trạng thái:')) {
-      depositStatus = cleaned.replaceAll('Trạng thái:', '').trim();
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (userNote.isNotEmpty) ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.sticky_note_2_outlined, size: 14, color: AppColors.onSurfaceVariant),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    userNote,
-                    style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant, fontStyle: FontStyle.italic),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-          ],
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withAlpha(12),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.primary.withAlpha(40)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.shopping_bag_outlined, size: 16, color: AppColors.primary),
-                    const SizedBox(width: 6),
-                    const Text(
-                      'Đặt trước món ăn',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary),
-                    ),
-                    const Spacer(),
-                    if (depositStatus.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: depositStatus.contains('Đã cọc') ? AppColors.chipPaid.withAlpha(30) : AppColors.outlineVariant.withAlpha(120),
-                          borderRadius: BorderRadius.circular(100),
-                        ),
-                        child: Text(
-                          depositStatus,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: depositStatus.contains('Đã cọc') ? AppColors.chipPaid : AppColors.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                if (preOrderDetails.isNotEmpty) ...[
-                  const Divider(height: 16),
-                  const Text(
-                    'Món ăn:',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.onSurfaceVariant),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    preOrderDetails,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, height: 1.4),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final r = reservation;
     final (icon, label, color) = switch (r.status) {
-      1 => ('✅', 'Đã xác nhận', AppColors.chipPaid),
+      1 => r.isSeated
+          ? ('🍽️', 'Đã nhận bàn', AppColors.primary)
+          : ('✅', 'Đã xác nhận', AppColors.chipPaid),
       2 => ('❌', 'Từ chối', AppColors.error),
       3 => ('🚫', 'Đã hủy', AppColors.onSurfaceVariant),
       _ => ('⏳', 'Chờ xác nhận', AppColors.warning),
     };
+
+    final assignedTable = r.assignedTableName;
+    final customerMessage = r.customerFacingNote;
+    final canCancel = r.status == 0 ||
+        (r.status == 1 &&
+            !r.isSeated &&
+            r.reservedAt.isAfter(DateTime.now().add(const Duration(minutes: 30))));
 
     return Container(
       decoration: BoxDecoration(
@@ -618,9 +501,9 @@ class _HistoryCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: (color).withAlpha(25),
+                color: color.withAlpha(25),
                 borderRadius: BorderRadius.circular(100),
-                border: Border.all(color: (color).withAlpha(80)),
+                border: Border.all(color: color.withAlpha(80)),
               ),
               child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
             ),
@@ -628,17 +511,59 @@ class _HistoryCard extends StatelessWidget {
 
           const SizedBox(height: 10),
 
-          // Info row
-          Row(children: [
-            Icon(Icons.people_rounded, size: 14, color: AppColors.onSurfaceVariant),
-            const SizedBox(width: 4),
-            Text('${r.guestCount} người', style: const TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant)),
-          ]),
+          // Info row (Số khách + Số bàn được xếp)
+          Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.people_rounded, size: 14, color: AppColors.onSurfaceVariant),
+                const SizedBox(width: 4),
+                Text('${r.guestCount} người', style: const TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant)),
+              ]),
+              if (assignedTable != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withAlpha(18),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.primary.withAlpha(60)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.table_restaurant_rounded, size: 13, color: AppColors.primary),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Đã xếp: $assignedTable',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
 
-          _buildReservationNote(r.note, context),
+          if (r.note != null && r.note!.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.sticky_note_2_outlined, size: 14, color: AppColors.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    r.note!,
+                    style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant, fontStyle: FontStyle.italic),
+                  ),
+                ),
+              ],
+            ),
+          ],
 
-          // Manager note
-          if (r.managerNote != null && r.managerNote!.isNotEmpty) ...[
+          // Lời nhắn phản hồi dành cho Khách hàng (đã lọc sạch chỉ dẫn Upsell nội bộ)
+          if (customerMessage != null && customerMessage.isNotEmpty) ...[
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.all(10),
@@ -648,15 +573,15 @@ class _HistoryCard extends StatelessWidget {
                 border: Border.all(color: color.withAlpha(50)),
               ),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Icon(Icons.comment_rounded, size: 14, color: color),
+                Icon(Icons.restaurant_rounded, size: 14, color: color),
                 const SizedBox(width: 8),
-                Expanded(child: Text(r.managerNote!, style: TextStyle(fontSize: 12, color: color))),
+                Expanded(child: Text(customerMessage, style: TextStyle(fontSize: 12, color: color))),
               ]),
             ),
           ],
 
-          // Cancel button for pending bookings
-          if (r.status == 0) ...[
+          // Cancel button
+          if (canCancel) ...[
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,

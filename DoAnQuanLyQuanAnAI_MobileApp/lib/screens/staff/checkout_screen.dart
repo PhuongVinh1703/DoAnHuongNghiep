@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:doanquanlyquananai_mobileapp/config/constants.dart';
 import 'package:doanquanlyquananai_mobileapp/core/constants/app_colors.dart';
 import 'package:doanquanlyquananai_mobileapp/core/utils/money_formatter.dart';
+import 'package:doanquanlyquananai_mobileapp/core/utils/ai_tracker.dart';
 import 'package:doanquanlyquananai_mobileapp/theme/app_haptics.dart';
 import 'package:doanquanlyquananai_mobileapp/core/storage/secure_storage.dart';
 import 'package:doanquanlyquananai_mobileapp/models/customer/customer.dart';
@@ -47,6 +49,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _isFindingCustomer = false;
   bool _isValidatingVoucher = false;
 
+  @override
+  void initState() {
+    super.initState();
+    final autoPhone = AiTracker.extractCustomerPhone(widget.order.note);
+    if (autoPhone != null && autoPhone.isNotEmpty) {
+      _phoneCtrl.text = autoPhone;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _findCustomer();
+      });
+    }
+  }
+
   static const double _vat = 8.0;
 
   double get _subtotal => widget.order.subtotal;
@@ -87,7 +101,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (code.isEmpty) return;
     setState(() => _isValidatingVoucher = true);
 
-    // 1. Thử xác thực mã voucher cá nhân (CustomerVouchers)
     final vResult = await _customerSvc.validateVoucher(code, _subtotal);
     if (vResult.isSuccess && vResult.data != null) {
       setState(() {
@@ -101,7 +114,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
-    // 2. Nếu thất bại, thử xác thực mã khuyến mãi chung (DiscountCampaigns)
     final cResult = await _discountSvc.validateCampaign(code, _subtotal);
     setState(() => _isValidatingVoucher = false);
 
@@ -116,7 +128,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
-    // 3. Nếu cả hai đều không hợp lệ, hiển thị thông báo lỗi
     setState(() {
       _voucher = null;
       _campaign = null;
@@ -141,7 +152,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     if (!mounted) return;
     final orderProvider = context.read<OrderProvider>();
-    orderProvider.markConfirmClicked(); // Đánh dấu đã confirm cho AI tracker
+    orderProvider.markConfirmClicked();
 
     final accountId = await SecureStorage.getUserId();
     if (accountId == null) return;
@@ -194,7 +205,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Thanh Toán'),
+        title: const Text('Thanh Toán Tại Quầy'),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
@@ -256,6 +267,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _sectionTitle('📋 Đơn hàng — ${widget.order.tableName}'),
         ...widget.order.items.map(
           (item) {
+            final cleanNote = AiTracker.cleanDisplayNote(item.note);
             final cartItem = CartItem(
               menuItem: MenuItemModel(
                 itemId: item.itemId,
@@ -269,7 +281,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 categoryName: '',
               ),
               quantity: item.quantity,
-              note: item.note,
+              note: cleanNote.isNotEmpty ? cleanNote : null,
             );
             return OrderItemTile(item: cartItem, isEditable: false);
           },
@@ -308,10 +320,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Center(
+                  Center(
                     child: Text(
-                      'TIỆM MÌ CAY SƠN BỘ HẢI',
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+                      AppConstants.appName.toUpperCase(),
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -349,6 +361,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   const SizedBox(height: 8),
                   ...widget.order.items.map((item) {
                     final itemTotal = item.unitPrice * item.quantity;
+                    final cleanNote = AiTracker.cleanDisplayNote(item.note);
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Column(
@@ -374,11 +387,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               ),
                             ],
                           ),
-                          if (item.note != null && item.note!.isNotEmpty)
+                          if (cleanNote.isNotEmpty)
                             Padding(
                               padding: const EdgeInsets.only(left: 4, top: 2),
                               child: Text(
-                                '• ${item.note}',
+                                '• $cleanNote',
                                 style: const TextStyle(fontSize: 10, color: Colors.grey, fontStyle: FontStyle.italic),
                               ),
                             ),
