@@ -29,7 +29,6 @@ class BookingNotificationProvider extends ChangeNotifier {
           schema: 'public',
           table: 'Reservations',
           callback: (payload) {
-            // Tự động cập nhật thông báo và nhiệm vụ khi có đặt bàn mới/thay đổi
             if (_currentBranchId != null) {
               fetchPendingReservations(_currentBranchId!);
             }
@@ -63,18 +62,15 @@ class BookingNotificationProvider extends ChangeNotifier {
         _pendingReservations = data;
         _unreadCount = data.length;
       },
-      onFailure: (e) {
-        // Bỏ qua lỗi kết nối tạm thời
-      },
+      onFailure: (_) {},
     );
-    
+
     _isLoading = false;
     notifyListeners();
   }
 
   /// Khi khách hàng đặt bàn trong cùng phiên app, tăng nhanh chỉ số thông báo
   void addNewBookingNotification(Reservation reservation) {
-    // Tránh trùng lặp
     if (!_pendingReservations.any((r) => r.reservationId == reservation.reservationId)) {
       _pendingReservations.insert(0, reservation);
       _unreadCount++;
@@ -82,13 +78,13 @@ class BookingNotificationProvider extends ChangeNotifier {
     }
   }
 
-  /// Xoá số lượng chưa đọc (ví dụ khi manager mở hộp thư/danh sách đặt bàn)
+  /// Xoá số lượng chưa đọc
   void clearUnread() {
     _unreadCount = 0;
     notifyListeners();
   }
 
-  /// Lấy danh sách nhiệm vụ được giao cho Nhân viên
+  /// Lấy danh sách nhiệm vụ được giao cho Nhân viên Phục vụ trong ca
   Future<void> fetchStaffTasks(String staffName, int branchId) async {
     _currentStaffName = staffName;
     _currentBranchId = branchId;
@@ -97,16 +93,18 @@ class BookingNotificationProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    // Lấy đặt bàn đã xác nhận (status = 1) để tìm những bàn được phân công
     final result = await _reservationSvc.getReservations(status: 1, branchId: branchId);
     result.fold(
       onSuccess: (data) {
-        // Tìm các đặt bàn có managerNote chứa tên nhân viên
+        final target = staffName.trim().toLowerCase();
         _assignedTasks = data.where((r) {
-          final note = r.managerNote;
-          if (note == null || note.isEmpty) return false;
-          // Phù hợp cấu trúc: [Giao việc: Tên Nhân Viên]
-          return note.contains('Giao việc: $staffName');
+          if (r.isSeated) return false;
+          final note = (r.managerNote ?? '').toLowerCase();
+          if (note.isEmpty) return false;
+          // Hỗ trợ cả định dạng mới "[INTERNAL:Phụ trách: Tên NV...]" lẫn định dạng cũ "Giao việc: Tên NV"
+          return note.contains('phụ trách: $target') ||
+              note.contains('giao việc: $target') ||
+              note.contains('nhân viên ca trực');
         }).toList();
       },
       onFailure: (_) {},

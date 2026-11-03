@@ -60,7 +60,37 @@ class InvoiceService {
     }
   }
 
-  /// Thanh toán hóa đơn (gọi RPC checkout_order + phát hiện hành vi gian lận)
+  /// Xây dựng thông báo tiếng Việt chi tiết theo từng loại bất thường
+  String _buildDetailedAlertMessage({
+    required int alertType,
+    required double sessionDuration,
+    required double discountPercent,
+    required int txHour,
+    required int voidCount,
+    required double cancelRate,
+    required double addRemoveRatio,
+    required int itemsRemovedAfterConfirm,
+    required double anomalyScore,
+  }) {
+    switch (alertType) {
+      case 0: // CancelAfterPayment
+        return '[Hủy món sau xác nhận] Phát hiện xóa $itemsRemovedAfterConfirm món sau khi đã gửi bếp/xác nhận đơn';
+      case 2: // ExcessiveDiscount
+        return '[Lạm dụng giảm giá] Áp mức chiết khấu cao bất thường (${discountPercent.toStringAsFixed(0)}%)';
+      case 3: // UnusualHours
+        return '[Giao dịch ngoài giờ] Thanh toán vào khung giờ bất thường (${txHour}h)';
+      case 4: // FrequentCancellation
+        return '[Hủy bill liên tục] Hủy món $voidCount lần, tỷ lệ hủy đơn của NV đạt ${(cancelRate * 100).toInt()}%';
+      case 5: // SpeedAnomaly
+        return '[Thanh toán siêu tốc] Thời gian mở bàn đến thanh toán quá nhanh (${sessionDuration.toInt()}s)';
+      case 6: // AddRemoveAnomaly
+        return '[Thêm/xóa món bất thường] Tỷ lệ chỉnh sửa giỏ hàng cao (${(addRemoveRatio * 100).toInt()}%)';
+      default:
+        return 'AI phát hiện giao dịch bất thường (Độ tin cậy: ${(anomalyScore * 100).toInt()}%)';
+    }
+  }
+
+  /// Thanh toán hóa đơn (gọi RPC checkout_order + phát hiện hành vi gian lận qua AI Module + Hybrid Fallback)
   Future<ApiResult<CheckoutResponse>> checkout({
     required int orderId,
     required int accountId,
@@ -129,9 +159,8 @@ class InvoiceService {
         res as Map<String, dynamic>,
       );
 
-      // 3. Phân tích hành vi gian lận (AI Fraud Detection)
+      // 3. Phân tích hành vi gian lận (Ưu tiên gọi AI Microservice -> Fallback Luật thép khi AI offline)
       try {
-        // Lấy chính xác phần trăm giảm giá từ tham số truyền vào hoặc truy vấn từ DB
         double discountPercent = appliedDiscountPercent ?? 0.0;
         if (appliedDiscountPercent == null) {
           if (discountCampaignCode != null && discountCampaignCode.isNotEmpty) {
@@ -159,9 +188,8 @@ class InvoiceService {
             .difference(openedAt)
             .inSeconds
             .toDouble();
+        final currentHour = DateTime.now().hour;
 
-        // Tính toán cancel_rate: dùng giá trị từ effectiveTracker (nếu có),
-        // ngược lại truy vấn từ cơ sở dữ liệu dựa trên AccountId tạo đơn hoặc thanh toán.
         final targetStaffId = orderAccountId ?? accountId;
         double cancelRate = effectiveTracker.cancelRate;
         if (cancelRate == 0.0) {
@@ -182,7 +210,7 @@ class InvoiceService {
           'staff_id': targetStaffId.toString(),
           'session_duration': sessionDuration,
           'num_items_ordered': numItemsOrdered,
-          'transaction_hour': DateTime.now().hour.toDouble(),
+          'transaction_hour': currentHour.toDouble(),
           'checkout_time_sec': effectiveTracker.checkoutTimeSec,
           'void_count': effectiveTracker.voidCount,
           'discount_percent': discountPercent,
@@ -194,74 +222,18 @@ class InvoiceService {
 
         bool isAnomaly = false;
         double anomalyScore = 0.0;
-        String riskLevel = 'Low';
-        int alertType = 1; // Mặc định: Giao dịch bất thường
-        String alertMessage = 'AI phát hiện giao dịch bất thường';
+        String riskLevel = 'LOW';
+        int alertType = 1;
+        String alertMessage = '';
 
-        // --- Kịch bản Luật thép ở Client (đảm bảo không bị sót lỗi nghiêm trọng) ---
-        // 0. Hủy món sau khi đã gửi bếp / xác nhận (CancelAfterPayment)
-        if (effectiveTracker.itemsRemovedAfterConfirm > 0) {
-          isAnomaly = true;
-          anomalyScore = 0.98;
-          riskLevel = 'HIGH';
-          alertType = 0; // CancelAfterPayment
-          alertMessage =
-              '[Hủy món sau xác nhận] Phát hiện xóa ${effectiveTracker.itemsRemovedAfterConfirm} món sau khi gửi bếp/xác nhận';
-        }
-        // 1. Thanh toán siêu tốc (Session duration < 120 giây)
-        else if (sessionDuration > 0 && sessionDuration < 120.0) {
-          isAnomaly = true;
-          anomalyScore = 0.95;
-          riskLevel = 'HIGH';
-          alertType = 5; // SpeedAnomaly
-          alertMessage =
-              '[Thanh toán siêu tốc] Bất thường khi thanh toán (session: ${sessionDuration.toInt()}s)';
-        }
-        // 2. Giảm giá vượt ngưỡng (giảm giá >= 25%)
-        else if (discountPercent >= 25.0) {
-          isAnomaly = true;
-          anomalyScore = 0.95;
-          riskLevel = 'HIGH';
-          alertType = 2; // ExcessiveDiscount
-          alertMessage =
-              '[Lạm dụng giảm giá] Giảm giá quá lớn ($discountPercent%)';
-        }
-        // 3. Giao dịch ngoài giờ (từ 23h đến trước 8h sáng)
-        else if (DateTime.now().hour < 8 || DateTime.now().hour >= 23) {
-          isAnomaly = true;
-          anomalyScore = 0.90;
-          riskLevel = 'HIGH';
-          alertType = 3; // UnusualHours
-          alertMessage =
-              '[Giao dịch ngoài giờ] Thực hiện lúc ${DateTime.now().hour}h';
-        }
-        // 4. Hủy bill liên tục (Void count >= 5 và tỷ lệ hủy đơn >= 50%)
-        else if (effectiveTracker.voidCount >= 5 && cancelRate >= 0.50) {
-          isAnomaly = true;
-          anomalyScore = 0.90;
-          riskLevel = 'HIGH';
-          alertType = 4; // FrequentCancellation
-          alertMessage =
-              '[Hủy bill liên tục] Tần suất hủy món cao (${effectiveTracker.voidCount} lần) và tỷ lệ hủy đơn của NV là ${(cancelRate * 100).toInt()}%';
-        }
-        // 5. Thêm/xóa món bất thường (Tỷ lệ add_remove_ratio >= 70%)
-        else if (effectiveTracker.addRemoveRatio >= 0.70) {
-          isAnomaly = true;
-          anomalyScore = 0.85;
-          riskLevel = 'MEDIUM';
-          alertType = 6; // AddRemoveAnomaly
-          alertMessage =
-              '[Thêm/xóa món bất thường] Tỷ lệ chỉnh sửa giỏ hàng cao (${(effectiveTracker.addRemoveRatio * 100).toInt()}%)';
-        }
-
-        // Nếu luật thép chưa kích hoạt, gọi AI Microservice để phân tích sâu hơn
-        if (!isAnomaly) {
+        // Bước 3A: Gọi trực tiếp AI Microservice (/predict) để chạy mô hình Random Forest + Hybrid Rules
+        try {
           final aiRes = await _dio.post('$_aiBaseUrl/predict', data: payload);
           if (aiRes.statusCode == 200 && aiRes.data != null) {
             isAnomaly = aiRes.data['is_anomaly'] == true;
             anomalyScore =
                 (aiRes.data['anomaly_score'] as num? ?? 0.0).toDouble();
-            riskLevel = (aiRes.data['risk_level'] ?? 'Low').toString();
+            riskLevel = (aiRes.data['risk_level'] ?? 'LOW').toString().toUpperCase();
 
             if (isAnomaly) {
               final anomalies = aiRes.data['anomalies'] as List?;
@@ -270,39 +242,87 @@ class InvoiceService {
                 final typeStr = firstAnomaly?['type']?.toString();
                 if (typeStr == 'CancelAfterPayment') {
                   alertType = 0;
-                  alertMessage =
-                      '[Hủy sau khi khách trả tiền] Bất thường khi thanh toán';
                 } else if (typeStr == 'ExcessiveDiscount') {
                   alertType = 2;
-                  alertMessage =
-                      '[Lạm dụng giảm giá] Bất thường khi thanh toán';
                 } else if (typeStr == 'UnusualHours') {
                   alertType = 3;
-                  alertMessage =
-                      '[Giao dịch ngoài giờ] Bất thường khi thanh toán';
                 } else if (typeStr == 'FrequentCancellation') {
                   alertType = 4;
-                  alertMessage =
-                      '[Hành vi đáng ngờ] Bất thường khi thanh toán';
                 } else if (typeStr == 'SpeedAnomaly') {
                   alertType = 5;
-                  alertMessage =
-                      '[Thanh toán siêu tốc] Bất thường khi thanh toán';
                 } else if (typeStr == 'AddRemoveAnomaly') {
                   alertType = 6;
-                  alertMessage =
-                      '[Thêm/xóa món bất thường] Bất thường khi thanh toán';
                 } else {
                   alertType = 1;
-                  alertMessage =
-                      'AI phát hiện giao dịch bất thường (score: ${anomalyScore.toStringAsFixed(4)})';
                 }
-              } else {
-                alertType = 1;
-                alertMessage =
-                    'AI phát hiện giao dịch bất thường (score: ${anomalyScore.toStringAsFixed(4)})';
               }
+              alertMessage = _buildDetailedAlertMessage(
+                alertType: alertType,
+                sessionDuration: sessionDuration,
+                discountPercent: discountPercent,
+                txHour: currentHour,
+                voidCount: effectiveTracker.voidCount,
+                cancelRate: cancelRate,
+                addRemoveRatio: effectiveTracker.addRemoveRatio,
+                itemsRemovedAfterConfirm:
+                    effectiveTracker.itemsRemovedAfterConfirm,
+                anomalyScore: anomalyScore,
+              );
             }
+          }
+        } catch (aiErr) {
+          if (kDebugMode) {
+            print('AI Microservice đang ngoại tuyến hoặc khởi động lại, dùng bộ Luật thép dự phòng: $aiErr');
+          }
+        }
+
+        // Bước 3B: Bộ Luật thép dự phòng (Safety Net) nếu AI Server ngủ hoặc chưa bắt trúng ngưỡng cứng
+        if (!isAnomaly) {
+          if (effectiveTracker.itemsRemovedAfterConfirm > 0) {
+            isAnomaly = true;
+            anomalyScore = 0.98;
+            riskLevel = 'HIGH';
+            alertType = 0; // CancelAfterPayment
+          } else if (sessionDuration > 0 && sessionDuration < 120.0) {
+            isAnomaly = true;
+            anomalyScore = 0.95;
+            riskLevel = 'HIGH';
+            alertType = 5; // SpeedAnomaly
+          } else if (discountPercent >= 25.0) {
+            isAnomaly = true;
+            anomalyScore = 0.95;
+            riskLevel = 'HIGH';
+            alertType = 2; // ExcessiveDiscount
+          } else if (currentHour < 8 || currentHour >= 23) {
+            isAnomaly = true;
+            anomalyScore = 0.90;
+            riskLevel = 'HIGH';
+            alertType = 3; // UnusualHours
+          } else if (effectiveTracker.voidCount >= 5 && cancelRate >= 0.50) {
+            isAnomaly = true;
+            anomalyScore = 0.90;
+            riskLevel = 'HIGH';
+            alertType = 4; // FrequentCancellation
+          } else if (effectiveTracker.addRemoveRatio >= 0.70) {
+            isAnomaly = true;
+            anomalyScore = 0.85;
+            riskLevel = 'MEDIUM';
+            alertType = 6; // AddRemoveAnomaly
+          }
+
+          if (isAnomaly) {
+            alertMessage = _buildDetailedAlertMessage(
+              alertType: alertType,
+              sessionDuration: sessionDuration,
+              discountPercent: discountPercent,
+              txHour: currentHour,
+              voidCount: effectiveTracker.voidCount,
+              cancelRate: cancelRate,
+              addRemoveRatio: effectiveTracker.addRemoveRatio,
+              itemsRemovedAfterConfirm:
+                  effectiveTracker.itemsRemovedAfterConfirm,
+              anomalyScore: anomalyScore,
+            );
           }
         }
 
@@ -313,12 +333,19 @@ class InvoiceService {
             'features': payload,
           });
 
-          // Lưu cảnh báo gian lận vào bảng Alerts trực tiếp trên Supabase
+          // Gán đúng nhân sự chịu trách nhiệm:
+          // Các lỗi thao tác hủy/sửa món (0, 4, 6) gắn cho nhân viên tạo/phục vụ đơn (targetStaffId);
+          // Các lỗi tại khâu thanh toán/chiết khấu (2, 3, 5) gắn cho thu ngân (accountId).
+          final responsibleAccountId =
+              (alertType == 0 || alertType == 4 || alertType == 6)
+                  ? targetStaffId
+                  : accountId;
+
           await _db.from('Alerts').insert({
-            'AccountId': accountId,
+            'AccountId': responsibleAccountId,
             'OrderId': orderId,
             'AlertType': alertType,
-            'Severity': anomalyScore > 0.8 ? 2 : 1, // 2=High, 1=Medium
+            'Severity': (riskLevel == 'HIGH' || anomalyScore >= 0.75) ? 2 : 1,
             'Message': alertMessage,
             'Detail': detailJson,
             'AnomalyScore': anomalyScore,
@@ -326,7 +353,6 @@ class InvoiceService {
             'CreatedAt': DateTime.now().toIso8601String(),
           });
 
-          // Gán thông tin aiAlert vào checkoutResponse để hiển thị ở màn hình thành công
           checkoutResponse = CheckoutResponse(
             invoiceId: checkoutResponse.invoiceId,
             invoiceNo: checkoutResponse.invoiceNo,
@@ -340,9 +366,8 @@ class InvoiceService {
           );
         }
       } catch (e) {
-        // AI ngoại tuyến/lỗi -> Bỏ qua, vẫn cho phép thanh toán bình thường
         if (kDebugMode) {
-          print('Không thể gọi dịch vụ AI dự đoán gian lận: $e');
+          print('Lỗi ghi nhận cảnh báo AI: $e');
         }
       }
 

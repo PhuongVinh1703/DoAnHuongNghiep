@@ -29,9 +29,11 @@ class _CashierMainScreenState extends State<CashierMainScreen> {
   @override
   void initState() {
     super.initState();
-    _loadBranchName();
-    _fetchBillReqCount();
-    _subscribeToOrderChanges();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadBranchName();
+      _fetchBillReqCount();
+      _subscribeToOrderChanges();
+    });
   }
 
   @override
@@ -56,13 +58,23 @@ class _CashierMainScreenState extends State<CashierMainScreen> {
   }
 
   Future<void> _fetchBillReqCount() async {
+    if (!mounted) return;
     try {
+      final user = context.read<AuthService>().currentUser;
+      final branchId = user?.branchId;
+      final isOwner = user?.role == AppConstants.roleOwner;
+
       final supabase = Supabase.instance.client;
-      final res = await supabase
+      var query = supabase
           .from('Orders')
-          .select('OrderId, Note, TableId')
+          .select('OrderId, Note, TableId, DiningTables!inner(BranchId, TableName)')
           .eq('Status', 0);
 
+      if (!isOwner && branchId != null) {
+        query = query.eq('DiningTables.BranchId', branchId);
+      }
+
+      final res = await query;
       final list = (res as List)
           .where((o) => AiTracker.isPaymentRequested(o['Note']?.toString()))
           .toList();
@@ -81,10 +93,9 @@ class _CashierMainScreenState extends State<CashierMainScreen> {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'Orders',
-          callback: (payload) {
-            _fetchBillReqCount();
+          callback: (payload) async {
+            await _fetchBillReqCount();
 
-            // Nếu là UPDATE và có thêm cờ [BILL_REQ]
             if (payload.eventType == PostgresChangeEvent.update) {
               final newRecord = payload.newRecord;
               final oldRecord = payload.oldRecord;
@@ -96,6 +107,28 @@ class _CashierMainScreenState extends State<CashierMainScreen> {
                   AiTracker.isPaymentRequested(note) &&
                   !AiTracker.isPaymentRequested(oldNote)) {
                 final tableId = newRecord['TableId'];
+                if (!mounted || tableId == null) return;
+
+                final user = context.read<AuthService>().currentUser;
+                final myBranchId = user?.branchId;
+                final isOwner = user?.role == AppConstants.roleOwner;
+
+                String tableLabel = 'Bàn $tableId';
+                try {
+                  final tbl = await supabase
+                      .from('DiningTables')
+                      .select('TableName, BranchId')
+                      .eq('TableId', tableId)
+                      .maybeSingle();
+                  if (tbl != null) {
+                    final tblBranch = tbl['BranchId'] as int?;
+                    if (!isOwner && myBranchId != null && tblBranch != myBranchId) {
+                      return; // Không hiển thị thông báo của chi nhánh khác
+                    }
+                    tableLabel = tbl['TableName']?.toString() ?? tableLabel;
+                  }
+                } catch (_) {}
+
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -106,7 +139,7 @@ class _CashierMainScreenState extends State<CashierMainScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              '💳 Bàn $tableId vừa yêu cầu thanh toán!',
+                              '💳 $tableLabel vừa yêu cầu thanh toán tại quầy!',
                               style:
                                   const TextStyle(fontWeight: FontWeight.bold),
                             ),

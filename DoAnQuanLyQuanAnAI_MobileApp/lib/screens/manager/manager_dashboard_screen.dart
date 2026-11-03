@@ -56,13 +56,13 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
     final authService = context.read<AuthService>();
     final user = authService.currentUser;
 
-    if (user?.role == 0) {
+    if (user != null) {
       setState(() => _isLoadingBranches = true);
       final res = await BranchService().getBranches();
       if (res.isSuccess) {
         _branches = res.data ?? [];
       }
-      setState(() => _isLoadingBranches = false);
+      if (mounted) setState(() => _isLoadingBranches = false);
     }
 
     _loadDashboardData();
@@ -562,7 +562,9 @@ class _ManagerDashboardScreenState extends State<ManagerDashboardScreen> {
                             size: 16, color: AppColors.primary),
                         const SizedBox(width: 6),
                         Text(
-                          'Chi nhánh #${user?.branchId}',
+                          _branches.where((b) => b.branchId == user?.branchId).isNotEmpty
+                              ? _branches.firstWhere((b) => b.branchId == user?.branchId).name
+                              : 'Chi nhánh #${user?.branchId}',
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,

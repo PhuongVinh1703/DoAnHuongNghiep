@@ -1,15 +1,16 @@
 """
-train_model.py  v3.0
+train_model.py  v3.1
 Train 2 model phát hiện gian lận nhà hàng:
   1. Binary classifier  : Normal vs Anomaly
   2. Multiclass classifier: Phân loại 6 loại bất thường
 
-FEATURES (9 đặc trưng — thêm items_removed_after_confirm so với v2):
+FEATURES (9 đặc trưng):
   session_duration, num_items_ordered, cancel_rate, transaction_hour,
   checkout_time_sec, void_count, discount_percent, add_remove_ratio,
   items_removed_after_confirm
 """
 
+import os
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
@@ -19,13 +20,16 @@ from sklearn.metrics import classification_report, roc_auc_score
 import pickle
 import json
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 print("=" * 60)
-print("  TRAINING ANOMALY DETECTION MODEL v3.0 (6 LOẠI)")
+print("  TRAINING ANOMALY DETECTION MODEL v3.1 (6 LOẠI)")
 print("=" * 60)
 
 # ── 1. Load dữ liệu ───────────────────────────────────────────
 print("\n[1/6] Load dữ liệu...")
-df = pd.read_csv("training_data.csv")
+csv_path = os.path.join(BASE_DIR, "training_data.csv")
+df = pd.read_csv(csv_path)
 print(f"     Tổng: {len(df)} mẫu")
 print(df["anomaly_type"].value_counts())
 
@@ -38,7 +42,7 @@ FEATURES = [
     "void_count",
     "discount_percent",
     "add_remove_ratio",
-    "items_removed_after_confirm",   # Feature mới — phân biệt CancelAfterPayment
+    "items_removed_after_confirm",
 ]
 
 # Kiểm tra tất cả feature tồn tại
@@ -123,24 +127,24 @@ for feat, score in imp:
 # ── 6. Lưu model ──────────────────────────────────────────────
 print("\n[6/6] Lưu model...")
 
-with open("binary_model.pkl",  "wb") as f: pickle.dump(binary_model, f)
-with open("multi_model.pkl",   "wb") as f: pickle.dump(multi_model,  f)
-with open("scaler.pkl",        "wb") as f: pickle.dump(scaler,       f)
-with open("label_encoder.pkl", "wb") as f: pickle.dump(le,           f)
-with open("anomaly_model.pkl", "wb") as f: pickle.dump(binary_model, f)  # tương thích ngược
+with open(os.path.join(BASE_DIR, "binary_model.pkl"),  "wb") as f: pickle.dump(binary_model, f)
+with open(os.path.join(BASE_DIR, "multi_model.pkl"),   "wb") as f: pickle.dump(multi_model,  f)
+with open(os.path.join(BASE_DIR, "scaler.pkl"),        "wb") as f: pickle.dump(scaler,       f)
+with open(os.path.join(BASE_DIR, "label_encoder.pkl"), "wb") as f: pickle.dump(le,           f)
+with open(os.path.join(BASE_DIR, "anomaly_model.pkl"), "wb") as f: pickle.dump(binary_model, f)
 
 config = {
     "features":                  FEATURES,
     "anomaly_threshold":         0.5,
     "high_risk":                 0.75,
     "anomaly_types":             list(le.classes_),
-    "model_version":             "3.0",
+    "model_version":             "3.1",
     "auc_score":                 round(auc,   4),
     "cv_f1_mean":                round(cv_f1, 4),
     "training_samples":          len(df),
     "anomaly_samples":           int((y_binary == 1).sum()),
 }
-with open("model_config.json", "w", encoding="utf-8") as f:
+with open(os.path.join(BASE_DIR, "model_config.json"), "w", encoding="utf-8") as f:
     json.dump(config, f, indent=2, ensure_ascii=False)
 
 print("✅ binary_model.pkl")

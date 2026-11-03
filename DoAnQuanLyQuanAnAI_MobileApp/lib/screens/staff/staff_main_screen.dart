@@ -51,7 +51,7 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
           event: PostgresChangeEvent.update,
           schema: 'public',
           table: 'Orders',
-          callback: (payload) {
+          callback: (payload) async {
             final newRecord = payload.newRecord;
             final oldRecord = payload.oldRecord;
             final status = newRecord['Status'];
@@ -63,6 +63,28 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
                 !AiTracker.isKitchenReady(oldNote)) {
               final orderId = newRecord['OrderId'];
               final tableId = newRecord['TableId'];
+              if (!mounted || tableId == null) return;
+
+              final user = context.read<AuthService>().currentUser;
+              final myBranchId = user?.branchId;
+              final isOwner = user?.role == AppConstants.roleOwner;
+
+              String tableLabel = 'Bàn $tableId';
+              try {
+                final tbl = await supabase
+                    .from('DiningTables')
+                    .select('TableName, BranchId')
+                    .eq('TableId', tableId)
+                    .maybeSingle();
+                if (tbl != null) {
+                  final tblBranch = tbl['BranchId'] as int?;
+                  if (!isOwner && myBranchId != null && tblBranch != myBranchId) {
+                    return; // Bỏ qua thông báo của chi nhánh khác
+                  }
+                  tableLabel = tbl['TableName']?.toString() ?? tableLabel;
+                }
+              } catch (_) {}
+
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -72,7 +94,7 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            '🍲 Bếp báo: Toàn bộ đơn #$orderId (Bàn $tableId) đã chế biến xong!',
+                            '🍲 Bếp báo: Toàn bộ đơn #$orderId ($tableLabel) đã chế biến xong!',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -91,7 +113,7 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
           event: PostgresChangeEvent.update,
           schema: 'public',
           table: 'OrderItems',
-          callback: (payload) {
+          callback: (payload) async {
             final newRecord = payload.newRecord;
             final oldRecord = payload.oldRecord;
             final newNote = newRecord['Note']?.toString() ?? '';
@@ -99,6 +121,32 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
 
             if (AiTracker.isItemDone(newNote) && !AiTracker.isItemDone(oldNote)) {
               final orderId = newRecord['OrderId'];
+              if (!mounted || orderId == null) return;
+
+              final user = context.read<AuthService>().currentUser;
+              final myBranchId = user?.branchId;
+              final isOwner = user?.role == AppConstants.roleOwner;
+
+              String tableLabel = '';
+              try {
+                final ord = await supabase
+                    .from('Orders')
+                    .select('TableId, DiningTables(TableName, BranchId)')
+                    .eq('OrderId', orderId)
+                    .maybeSingle();
+                if (ord != null) {
+                  final tbl = ord['DiningTables'] as Map?;
+                  final tblBranch = tbl?['BranchId'] as int?;
+                  if (!isOwner && myBranchId != null && tblBranch != myBranchId) {
+                    return; // Bỏ qua thông báo của chi nhánh khác
+                  }
+                  final tName = tbl?['TableName']?.toString();
+                  if (tName != null && tName.isNotEmpty) {
+                    tableLabel = ' ($tName)';
+                  }
+                }
+              } catch (_) {}
+
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -108,7 +156,7 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            '🍲 Bếp báo ra món cho Đơn #$orderId: Đã nấu xong, sẵn sàng bưng ra bàn!',
+                            '🍲 Bếp báo ra món cho Đơn #$orderId$tableLabel: Đã nấu xong, sẵn sàng bưng ra bàn!',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -147,7 +195,7 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
           final branch = res.data!.firstWhere(
             (b) => b.branchId == user!.branchId,
           );
-          setState(() => _branchName = branch.name);
+          if (mounted) setState(() => _branchName = branch.name);
         }
       } catch (_) {}
     }
@@ -163,7 +211,6 @@ class _StaffMainScreenState extends State<StaffMainScreen> {
     final user = parentContext.read<AuthService>().currentUser;
     if (user == null) return;
 
-    // Refresh tasks when opening bottom sheet
     parentContext.read<BookingNotificationProvider>().fetchStaffTasks(
       user.fullName,
       user.branchId ?? 1,
@@ -476,39 +523,53 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
   @override
   void initState() {
     super.initState();
-    final parsed = _parseManagerNote(widget.reservation.managerNote ?? '');
+    final parsed = _parseManagerNote(widget.reservation);
     final List<String> tasks = List<String>.from(parsed['tasks'] ?? []);
     for (var task in tasks) {
-      if (task.isNotEmpty && task != 'Hỗ trợ phục vụ bàn') {
+      if (task.isNotEmpty &&
+          task != 'Hỗ trợ phục vụ bàn' &&
+          task != 'Đón tiếp và phục vụ bàn') {
         _checkedTasks[task] = false;
       }
     }
   }
 
-  Map<String, dynamic> _parseManagerNote(String note) {
+  Map<String, dynamic> _parseManagerNote(Reservation r) {
+    final source = r.internalStaffTask ?? r.managerNote ?? '';
     String staffName = '';
     String shift = '';
     List<String> tasks = [];
     String customNote = '';
 
-    final matchBracket = RegExp(r'\[Giao việc:\s*([^|\]]+?)\s*\|\s*([^\]]+)\]');
-    final match = matchBracket.firstMatch(note);
-    if (match != null) {
-      staffName = match.group(1)?.trim() ?? '';
-      shift = match.group(2)?.trim() ?? '';
+    // 1. Hỗ trợ định dạng mới: "Phụ trách: Tên NV (Ca ...) | Nhiệm vụ: ... Ghi chú QL: ..."
+    final newMatch = RegExp(r'Phụ trách:\s*([^(|]+?)\s*\(([^)]+)\)\s*\|').firstMatch(source);
+    if (newMatch != null) {
+      staffName = newMatch.group(1)?.trim() ?? '';
+      shift = newMatch.group(2)?.trim() ?? '';
+    } else {
+      // 2. Hỗ trợ định dạng cũ: "[Giao việc: Tên NV | Ca ...]"
+      final matchBracket = RegExp(r'\[?Giao việc:\s*([^|\]]+?)\s*\|\s*([^\]]+)\]?');
+      final match = matchBracket.firstMatch(source);
+      if (match != null) {
+        staffName = match.group(1)?.trim() ?? '';
+        shift = match.group(2)?.trim() ?? '';
+      }
     }
 
-    final tasksIndex = note.indexOf('Nhiệm vụ:');
+    final tasksIndex = source.indexOf('Nhiệm vụ:');
     if (tasksIndex != -1) {
-      int endTasksIndex = note.indexOf('. Ghi chú thêm:', tasksIndex);
+      int endTasksIndex = source.indexOf('. Ghi chú QL:', tasksIndex);
       if (endTasksIndex == -1) {
-        endTasksIndex = note.indexOf('.', tasksIndex);
+        endTasksIndex = source.indexOf('. Ghi chú thêm:', tasksIndex);
       }
       if (endTasksIndex == -1) {
-        endTasksIndex = note.length;
+        endTasksIndex = source.indexOf('.', tasksIndex);
+      }
+      if (endTasksIndex == -1) {
+        endTasksIndex = source.length;
       }
 
-      String tasksStr = note.substring(tasksIndex + 9, endTasksIndex).trim();
+      String tasksStr = source.substring(tasksIndex + 9, endTasksIndex).trim();
       if (tasksStr.endsWith('.')) {
         tasksStr = tasksStr.substring(0, tasksStr.length - 1);
       }
@@ -521,9 +582,14 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
       }
     }
 
-    final noteIndex = note.indexOf('Ghi chú thêm:');
+    int noteIndex = source.indexOf('Ghi chú QL:');
     if (noteIndex != -1) {
-      customNote = note.substring(noteIndex + 13).trim();
+      customNote = source.substring(noteIndex + 11).trim();
+    } else {
+      noteIndex = source.indexOf('Ghi chú thêm:');
+      if (noteIndex != -1) {
+        customNote = source.substring(noteIndex + 13).trim();
+      }
     }
 
     return {
@@ -536,17 +602,20 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
 
   @override
   Widget build(BuildContext context) {
-    final parsed = _parseManagerNote(widget.reservation.managerNote ?? '');
+    final parsed = _parseManagerNote(widget.reservation);
     final shift = parsed['shift'] as String;
     final List<String> tasks = List<String>.from(parsed['tasks'] ?? []);
     final customNote = parsed['customNote'] as String;
+    final assignedTable = widget.reservation.assignedTableName;
 
     final revenueTasks = tasks
         .where(
           (t) =>
               t.toLowerCase().contains('upsell') ||
+              t.toLowerCase().contains('đặc sản') ||
               t.toLowerCase().contains('tráng miệng') ||
               t.toLowerCase().contains('vip') ||
+              t.toLowerCase().contains('tích điểm') ||
               t.toLowerCase().contains('tư vấn') ||
               t.toLowerCase().contains('doanh thu'),
         )
@@ -555,9 +624,11 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
     final experienceTasks = tasks
         .where(
           (t) =>
+              t.toLowerCase().contains('set up') ||
               t.toLowerCase().contains('bàn sạch') ||
               t.toLowerCase().contains('đón') ||
               t.toLowerCase().contains('pre-order') ||
+              t.toLowerCase().contains('lên món') ||
               t.toLowerCase().contains('ra món') ||
               t.toLowerCase().contains('trải nghiệm'),
         )
@@ -567,22 +638,11 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
         .where((t) => !revenueTasks.contains(t) && !experienceTasks.contains(t))
         .toList();
 
-    final reservedHour = widget.reservation.reservedAt.hour.toString().padLeft(
-      2,
-      '0',
-    );
-    final reservedMinute = widget.reservation.reservedAt.minute
-        .toString()
-        .padLeft(2, '0');
-    final reservedDay = widget.reservation.reservedAt.day.toString().padLeft(
-      2,
-      '0',
-    );
-    final reservedMonth = widget.reservation.reservedAt.month
-        .toString()
-        .padLeft(2, '0');
-    final reservedTimeStr =
-        '$reservedHour:$reservedMinute - $reservedDay/$reservedMonth';
+    final reservedHour = widget.reservation.reservedAt.hour.toString().padLeft(2, '0');
+    final reservedMinute = widget.reservation.reservedAt.minute.toString().padLeft(2, '0');
+    final reservedDay = widget.reservation.reservedAt.day.toString().padLeft(2, '0');
+    final reservedMonth = widget.reservation.reservedAt.month.toString().padLeft(2, '0');
+    final reservedTimeStr = '$reservedHour:$reservedMinute - $reservedDay/$reservedMonth';
 
     final allCompleted =
         _checkedTasks.isNotEmpty && _checkedTasks.values.every((val) => val);
@@ -634,13 +694,38 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          widget.reservation.customerName,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: Colors.black87,
-                          ),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                widget.reservation.customerName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: Colors.black87,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (assignedTable != null) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFDCFCE7),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  assignedTable,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF15803D),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -704,41 +789,17 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (revenueTasks.isNotEmpty) ...[
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.trending_up_rounded,
-                          size: 16,
-                          color: AppColors.secondary,
-                        ),
-                        const SizedBox(width: 6),
-                        const Text(
-                          'Tối ưu doanh thu (Lợi nhuận)',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: AppColors.secondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    ...revenueTasks.map((t) => _buildCheckItem(t)),
-                    const SizedBox(height: 12),
-                  ],
-
                   if (experienceTasks.isNotEmpty) ...[
-                    Row(
+                    const Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.favorite_rounded,
                           size: 16,
                           color: AppColors.primary,
                         ),
-                        const SizedBox(width: 6),
-                        const Text(
-                          'Tối ưu trải nghiệm (Giữ chân khách)',
+                        SizedBox(width: 6),
+                        Text(
+                          'Chuẩn bị đón tiếp & Trải nghiệm',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
@@ -752,16 +813,40 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
                     const SizedBox(height: 12),
                   ],
 
-                  if (commonTasks.isNotEmpty) ...[
-                    Row(
+                  if (revenueTasks.isNotEmpty) ...[
+                    const Row(
                       children: [
-                        const Icon(
+                        Icon(
+                          Icons.trending_up_rounded,
+                          size: 16,
+                          color: AppColors.secondary,
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          'Tư vấn & Chăm sóc khách hàng',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: AppColors.secondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ...revenueTasks.map((t) => _buildCheckItem(t)),
+                    const SizedBox(height: 12),
+                  ],
+
+                  if (commonTasks.isNotEmpty) ...[
+                    const Row(
+                      children: [
+                        Icon(
                           Icons.assignment_outlined,
                           size: 16,
                           color: Colors.blueGrey,
                         ),
-                        const SizedBox(width: 6),
-                        const Text(
+                        SizedBox(width: 6),
+                        Text(
                           'Nhiệm vụ phục vụ bàn',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
@@ -777,7 +862,7 @@ class _TaskReservationCardState extends State<TaskReservationCard> {
                   ],
 
                   if (tasks.isEmpty) ...[
-                    _buildCheckItem('Hỗ trợ phục vụ bàn'),
+                    _buildCheckItem('Đón tiếp và phục vụ bàn'),
                     const SizedBox(height: 12),
                   ],
 
